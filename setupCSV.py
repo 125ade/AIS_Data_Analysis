@@ -125,7 +125,7 @@ csv_output_dir = 'dataset/AIS_Dataset_csv'
 
 for year in years:
     # Percorso al file SQL e directory di output CSV
-    sql_file_path = f'ais_stat_data_{year}.sql'
+    sql_file_path = f'dataset/AIS_Dataset/ais_stat_data_{year}.sql'
 
     # Esegue la funzione di conversione con chunk di 40.000 record
     sql_to_csv_chunks(sql_file_path, csv_output_dir, year, chunk_size=40000)

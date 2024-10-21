@@ -25,7 +25,7 @@ def analyze_ais_dataset(dataset_path):
                 unique_mmsi.update(df['MMSI'].unique())
 
                 # Trova MMSI che si ripetono consecutivamente per almeno 10 volte in un giorno
-                df['Timestamp'] = pd.to_datetime(df['Timestamp'])
+                df['Timestamp'] = pd.to_datetime(df['timestamp'])
                 df['Date'] = df['Timestamp'].dt.date  # Estrai la data
                 df['MMSI_Consecutive'] = (df['MMSI'] != df['MMSI'].shift()).cumsum()  # Gruppo per cambiamento di MMSI
 
