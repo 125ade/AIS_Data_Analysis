@@ -31,7 +31,15 @@ Run the following script to organize and prepare the CSV files:
 python setupCSV.py
 ```
 
-### Step 5: Run Data Analysis
+### Step 5: Prepare Tracks CSV Files
+
+Run the following script to organize and prepare the vessels tracks CSV files:
+
+```bash
+python setupTracks.py
+```
+
+### Step 6: Run Data Analysis
 
 Initiate a preliminary analysis of the dataset using:
 
