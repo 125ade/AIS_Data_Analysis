@@ -6,7 +6,7 @@ import os
 from tqdm import tqdm
 
 # Definisci i percorsi e gli anni da cercare
-paths = ["dataset/AIS_Dataset_csv", "dataset/AIS_Tracks_csv", "dataset/AIS_Dataset"]
+paths = ["dataset/AIS_Dataset", "dataset/AIS_Dataset_csv", "dataset/AIS_Tracks_csv", "dataset/AIS_Tracks_over10_csv", "dataset/AIS_Tracks_under10_csv"]
 years = ["2020", "2021", "2022", "2023"]
 
 
