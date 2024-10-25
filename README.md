@@ -33,10 +33,10 @@ python setupCSV.py
 
 ### Step 5: Prepare Tracks CSV Files
 
-Run the following script to organize and prepare the vessels tracks CSV files:
+Run the following script to organize and prepare the vessels tracks CSV files, you need to select the year
 
 ```bash
-python setupTracks.py
+python setupTracks.py --year 2020
 ```
 
 ### Step 6: Run Data Analysis
@@ -44,5 +44,5 @@ python setupTracks.py
 Initiate a preliminary analysis of the dataset using:
 
 ```bash
-python analyzer.py
+python analyzer_1.py
 ```
