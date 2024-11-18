@@ -1,7 +1,7 @@
 """
 Script per generare grafici, heatmap e mappe interattive giornaliere.
-Le mappe includono geometrie dettagliate del porto, con colorazione per tipo di nave e popup con informazioni sui punti
-quando MMSI è 0.
+Le mappe includono geometrie dettagliate del porto, con colorazione per tipo di nave e popup con informazioni sui punti.
+Inoltre, è stata aggiunta una legenda dei colori dei tipi di nave.
 """
 
 import os
@@ -17,6 +17,7 @@ from shapely.geometry import shape
 from tqdm import tqdm
 import folium
 import json
+from branca.element import Template, MacroElement
 
 ais_antenna_coords = [43.58693627326397, 13.51656777958965]  # Lat, Lon dell'antenna AIS
 # GeoJSON del porto
@@ -422,224 +423,258 @@ PORT_GEOJSON = {
 
 
 def create_unique_directory(base_path="results", prefix="analysis"):
-    """Crea una directory unica per salvare i risultati."""
-    if not os.path.exists(base_path):
-        os.makedirs(base_path)
+  """Crea una directory unica per salvare i risultati."""
+  if not os.path.exists(base_path):
+    os.makedirs(base_path)
 
-    n = 1
-    while os.path.exists(os.path.join(base_path, f"{prefix}_{n}")):
-        n += 1
+  n = 1
+  while os.path.exists(os.path.join(base_path, f"{prefix}_{n}")):
+    n += 1
 
-    unique_directory = os.path.join(base_path, f"{prefix}_{n}")
-    os.makedirs(unique_directory)
-    return unique_directory
+  unique_directory = os.path.join(base_path, f"{prefix}_{n}")
+  os.makedirs(unique_directory)
+  return unique_directory
 
 
 def load_csv(file):
-    """Carica un singolo file CSV."""
-    return pd.read_csv(file)
+  """Carica un singolo file CSV."""
+  return pd.read_csv(file)
 
 
 def process_year_data(year_data_tuple):
-    """Processa i dati per un anno specifico: genera grafici, heatmap e mappe interattive."""
-    year, data, results_dir = year_data_tuple
-    year_dir = os.path.join(results_dir, str(year))
-    os.makedirs(year_dir, exist_ok=True)
+  """Processa i dati per un anno specifico: genera grafici, heatmap e mappe interattive."""
+  year, data, results_dir = year_data_tuple
+  year_dir = os.path.join(results_dir, str(year))
+  os.makedirs(year_dir, exist_ok=True)
 
-    # Genera grafici per l'anno
-    generate_yearly_plots(data, year_dir, year)
+  # Genera grafici per l'anno
+  generate_yearly_plots(data, year_dir, year)
 
-    # Genera mappe interattive giornaliere
-    generate_daily_maps_for_year(data, year_dir, year)
+  # Genera mappe interattive giornaliere
+  generate_daily_maps_for_year(data, year_dir, year)
 
 
 def generate_yearly_plots(data, year_dir, year):
-    """Genera i grafici per un anno specifico."""
-    print(f"Generating plots for year {year}...")
+  """Genera i grafici per un anno specifico."""
+  print(f"Generating plots for year {year}...")
 
-    plot_tasks = [
-        ("Vessel Type Distribution", plot_vessel_type_distribution),
-        ("Distance Distribution", plot_distance_distribution),
-        ("Bearing Distribution", plot_bearing_distribution),
-        ("Daily Messages", plot_daily_messages),
-        ("Hourly Messages", plot_hourly_messages),
-    ]
+  plot_tasks = [
+    ("Vessel Type Distribution", plot_vessel_type_distribution),
+    ("Distance Distribution", plot_distance_distribution),
+    ("Bearing Distribution", plot_bearing_distribution),
+    ("Daily Messages", plot_daily_messages),
+    ("Hourly Messages", plot_hourly_messages),
+  ]
 
-    for plot_name, plot_func in plot_tasks:
-        print(f" - {plot_name}")
-        plot_func(data, year_dir, year)
+  for plot_name, plot_func in plot_tasks:
+    print(f" - {plot_name}")
+    plot_func(data, year_dir, year)
 
 
 def plot_vessel_type_distribution(data, results_dir, year):
-    """Plot della distribuzione dei tipi di nave."""
-    type_counts = data['Type'].value_counts()
-    plt.figure(figsize=(10, 6))
-    sns.countplot(x='Type', data=data, order=type_counts.index)
-    plt.title(f'Distribution of Vessel Types ({year})')
-    plt.xlabel('Vessel Type')
-    plt.ylabel('Count')
-    plt.tight_layout()
-    plt.savefig(os.path.join(results_dir, f'vessel_type_distribution_{year}.png'))
-    plt.close()
+  """Plot della distribuzione dei tipi di nave."""
+  type_counts = data['Type'].value_counts()
+  plt.figure(figsize=(10, 6))
+  sns.countplot(x='Type', data=data, order=type_counts.index)
+  plt.title(f'Distribution of Vessel Types ({year})')
+  plt.xlabel('Vessel Type')
+  plt.ylabel('Count')
+  plt.tight_layout()
+  plt.savefig(os.path.join(results_dir, f'vessel_type_distribution_{year}.png'))
+  plt.close()
 
 
 def plot_distance_distribution(data, results_dir, year):
-    """Plot della distribuzione delle distanze."""
-    if 'Distance' in data.columns:
-        plt.figure(figsize=(10, 6))
-        sns.histplot(data['Distance'], bins=50, kde=True)
-        plt.title(f'Distribution of Distances ({year})')
-        plt.xlabel('Distance')
-        plt.ylabel('Count')
-        plt.tight_layout()
-        plt.savefig(os.path.join(results_dir, f'distance_distribution_{year}.png'))
-        plt.close()
-    else:
-        print(f"Distance column not found for year {year}. Skipping distance distribution plot.")
+  """Plot della distribuzione delle distanze."""
+  if 'Distance' in data.columns:
+    plt.figure(figsize=(10, 6))
+    sns.histplot(data['Distance'], bins=50, kde=True)
+    plt.title(f'Distribution of Distances ({year})')
+    plt.xlabel('Distance')
+    plt.ylabel('Count')
+    plt.tight_layout()
+    plt.savefig(os.path.join(results_dir, f'distance_distribution_{year}.png'))
+    plt.close()
+  else:
+    print(f"Distance column not found for year {year}. Skipping distance distribution plot.")
 
 
 def plot_bearing_distribution(data, results_dir, year):
-    """Plot della distribuzione delle direzioni."""
-    if 'Bearing' in data.columns:
-        plt.figure(figsize=(10, 6))
-        sns.histplot(data['Bearing'], bins=36, kde=True)
-        plt.title(f'Distribution of Bearings ({year})')
-        plt.xlabel('Bearing')
-        plt.ylabel('Count')
-        plt.tight_layout()
-        plt.savefig(os.path.join(results_dir, f'bearing_distribution_{year}.png'))
-        plt.close()
-    else:
-        print(f"Bearing column not found for year {year}. Skipping bearing distribution plot.")
+  """Plot della distribuzione delle direzioni."""
+  if 'Bearing' in data.columns:
+    plt.figure(figsize=(10, 6))
+    sns.histplot(data['Bearing'], bins=36, kde=True)
+    plt.title(f'Distribution of Bearings ({year})')
+    plt.xlabel('Bearing')
+    plt.ylabel('Count')
+    plt.tight_layout()
+    plt.savefig(os.path.join(results_dir, f'bearing_distribution_{year}.png'))
+    plt.close()
+  else:
+    print(f"Bearing column not found for year {year}. Skipping bearing distribution plot.")
 
 
 def plot_daily_messages(data, results_dir, year):
-    """Plot del numero di messaggi per giorno."""
-    daily_counts = data.groupby('date').size()
-    plt.figure(figsize=(12, 6))
-    daily_counts.plot()
-    plt.title(f'Number of AIS Messages per Day ({year})')
-    plt.xlabel('Date')
-    plt.ylabel('Number of Messages')
-    plt.tight_layout()
-    plt.savefig(os.path.join(results_dir, f'daily_messages_{year}.png'))
-    plt.close()
+  """Plot del numero di messaggi per giorno."""
+  daily_counts = data.groupby('date').size()
+  plt.figure(figsize=(12, 6))
+  daily_counts.plot()
+  plt.title(f'Number of AIS Messages per Day ({year})')
+  plt.xlabel('Date')
+  plt.ylabel('Number of Messages')
+  plt.tight_layout()
+  plt.savefig(os.path.join(results_dir, f'daily_messages_{year}.png'))
+  plt.close()
 
 
 def plot_hourly_messages(data, results_dir, year):
-    """Plot del numero di messaggi per ora."""
-    hourly_counts = data.groupby('hour').size()
-    plt.figure(figsize=(10, 6))
-    hourly_counts.plot(kind='bar')
-    plt.title(f'Number of AIS Messages per Hour ({year})')
-    plt.xlabel('Hour of the Day')
-    plt.ylabel('Number of Messages')
-    plt.tight_layout()
-    plt.savefig(os.path.join(results_dir, f'hourly_messages_{year}.png'))
-    plt.close()
+  """Plot del numero di messaggi per ora."""
+  hourly_counts = data.groupby('hour').size()
+  plt.figure(figsize=(10, 6))
+  hourly_counts.plot(kind='bar')
+  plt.title(f'Number of AIS Messages per Hour ({year})')
+  plt.xlabel('Hour of the Day')
+  plt.ylabel('Number of Messages')
+  plt.tight_layout()
+  plt.savefig(os.path.join(results_dir, f'hourly_messages_{year}.png'))
+  plt.close()
 
 
 def generate_daily_maps_for_year(data, year_dir, year):
-    """Genera mappe interattive giornaliere per ogni anno specifico."""
-    dates = sorted(data['date'].unique())
+  """Genera mappe interattive giornaliere per ogni anno specifico."""
+  dates = sorted(data['date'].unique())
 
-    # Crea una mappa centrata sull'antenna AIS
+  print(f"Generating daily maps for year {year}...")
+  for date in tqdm(dates, desc=f"Year {year}", unit="day"):
+    day_data = data[data['date'] == date]
 
+    # Controlla se ci sono abbastanza dati per generare la mappa
+    day_data = day_data.dropna(subset=['Longitude', 'Latitude'])
+    if day_data.empty:
+      continue
 
-    print(f"Generating daily maps for year {year}...")
-    for date in tqdm(dates, desc=f"Year {year}", unit="day"):
-        day_data = data[data['date'] == date]
+    # Crea la mappa
+    m = folium.Map(location=ais_antenna_coords, zoom_start=13)
 
-        # Controlla se ci sono abbastanza dati per generare la mappa
-        day_data = day_data.dropna(subset=['Longitude', 'Latitude'])
-        if day_data.empty:
-            continue
+    # Aggiungi poligoni del porto
+    for feature in PORT_GEOJSON['features']:
+      geom = shape(feature['geometry'])
+      name = feature['properties']['name']
+      folium.GeoJson(
+        geom,
+        name=name,
+        style_function=lambda x: {
+          "fillColor": "gray",
+          "color": "black",
+          "weight": 2,
+          "fillOpacity": 0.4,
+        },
+      ).add_to(m)
 
-        # Crea la mappa
-        m = folium.Map(location=ais_antenna_coords, zoom_start=13)
+    # Aggiungi marker per l'antenna AIS
+    folium.Marker(
+      location=ais_antenna_coords,
+      icon=folium.Icon(color='blue', icon='info-sign'),
+      popup="Antenna AIS"
+    ).add_to(m)
 
-        # Aggiungi poligoni del porto
-        for feature in PORT_GEOJSON['features']:
-            geom = shape(feature['geometry'])
-            name = feature['properties']['name']
-            folium.GeoJson(
-                geom,
-                name=name,
-                style_function=lambda x: {
-                    "fillColor": "gray",
-                    "color": "black",
-                    "weight": 2,
-                    "fillOpacity": 0.4,
-                },
-            ).add_to(m)
+    # Aggiungi punti delle navi con colorazione basata sul tipo
+    colors = sns.color_palette("husl", len(day_data['Type'].unique())).as_hex()
+    type_colors = {v_type: color for v_type, color in zip(day_data['Type'].unique(), colors)}
 
-        # Aggiungi marker per l'antenna AIS
-        folium.Marker(
-            location=ais_antenna_coords,
-            icon=folium.Icon(color='blue', icon='info-sign'),
-            popup="Antenna AIS"
-        ).add_to(m)
+    # Aggiungi legenda dei tipi di nave
+    legend_html = '''
+      {% macro html(this, kwargs) %}
+      <div style="
+      position: fixed; 
+      bottom: 50px; left: 50px; width: 150px; height: auto; 
+      background-color: white; 
+      border:2px solid grey; z-index:9999; font-size:14px;
+      ">
+      &emsp;<b>Vessel Types</b><br>
+      '''
+    for v_type, color in type_colors.items():
+      legend_html += f'&emsp;<i style="background:{color};width:10px;height:10px;display:inline-block;"></i>&nbsp;{v_type}<br>'
 
-        # Aggiungi punti delle navi con colorazione basata sul tipo
-        colors = sns.color_palette("husl", len(day_data['Type'].unique())).as_hex()
-        type_colors = {v_type: color for v_type, color in zip(day_data['Type'].unique(), colors)}
+    legend_html += '''
+      </div>
+      {% endmacro %}
+      '''
 
-        for _, row in day_data.iterrows():
-            popup_text = None
-            if row['MMSI'] == 0:
-                popup_text = "<br>".join([f"{col}: {row[col]}" for col in day_data.columns])
-            folium.CircleMarker(
-                location=[row['Latitude'], row['Longitude']],
-                radius=3,
-                color=type_colors.get(row['Type'], 'gray'),
-                fill=True,
-                fill_opacity=0.7,
-                popup=popup_text
-            ).add_to(m)
+    legend = MacroElement()
+    legend._template = Template(legend_html)
+    m.get_root().add_child(legend)
 
-        # Salva la mappa come file HTML
-        map_path = os.path.join(year_dir, f"map_{date}.html")
-        m.save(map_path)
+    # Aggiungi marker per le navi
+    for _, row in day_data.iterrows():
+      # Seleziona le colonne rilevanti per il popup
+      popup_info = {
+        'MMSI': row['MMSI'],
+        'Type': row['Type'],
+        'Latitude': row['Latitude'],
+        'Longitude': row['Longitude'],
+        'Datetime': row['datetime']
+      }
+      popup_text = "<br>".join([f"{k}: {v}" for k, v in popup_info.items()])
+
+      folium.CircleMarker(
+        location=[row['Latitude'], row['Longitude']],
+        radius=3,
+        color=type_colors.get(row['Type'], 'gray'),
+        fill=True,
+        fill_opacity=0.7,
+        popup=folium.Popup(popup_text, max_width=300)
+      ).add_to(m)
+
+    # Definisci la cartella delle mappe
+    maps_dir = os.path.join(year_dir, "maps")
+    os.makedirs(maps_dir, exist_ok=True)
+
+    # Percorso completo per salvare la mappa
+    map_path = os.path.join(maps_dir, f"map_{date}.html")
+
+    # Salva la mappa come file HTML
+    m.save(map_path)
 
 
 if __name__ == '__main__':
-    mp.freeze_support()  # Necessario per Windows
-    mp.set_start_method('spawn')  # Compatibilità con Windows
+  mp.freeze_support()  # Necessario per Windows
+  mp.set_start_method('spawn')  # Compatibilità con Windows
 
-    results_dir = create_unique_directory()
+  results_dir = create_unique_directory()
 
-    dataset_folder = r'dataset/AIS_Dataset_csv'  # Assicurati che il percorso sia corretto
-    csv_files = [os.path.join(dataset_folder, f) for f in os.listdir(dataset_folder) if f.endswith('.csv')]
-    csv_files = csv_files[:1]
-    if not csv_files:
-        raise FileNotFoundError(f"No CSV files found in the folder {dataset_folder}. Please check the path.")
+  dataset_folder = r'dataset/AIS_Dataset_csv'  # Assicurati che il percorso sia corretto
+  csv_files = [os.path.join(dataset_folder, f) for f in os.listdir(dataset_folder) if f.endswith('.csv')]
+  # csv_files = csv_files[:1]  # Commenta o rimuovi questa linea per elaborare tutti i file
+  if not csv_files:
+    raise FileNotFoundError(f"No CSV files found in the folder {dataset_folder}. Please check the path.")
 
-    print("Loading CSV files using parallel processing...")
-    with mp.Pool(mp.cpu_count()) as pool:
-        data_chunks = list(tqdm(pool.imap(load_csv, csv_files), total=len(csv_files), desc="Loading CSV files"))
+  print("Loading CSV files using parallel processing...")
+  with mp.Pool(mp.cpu_count()) as pool:
+    data_chunks = list(tqdm(pool.imap(load_csv, csv_files), total=len(csv_files), desc="Loading CSV files"))
 
-    print("Concatenating dataframes...")
-    data = pd.concat(data_chunks, ignore_index=True)
-    del data_chunks  # Libera memoria
+  print("Concatenating dataframes...")
+  data = pd.concat(data_chunks, ignore_index=True)
+  del data_chunks  # Libera memoria
 
-    print("Preprocessing data...")
-    data['datetime'] = pd.to_datetime(data['timestamp'], unit='s')
-    data['date'] = data['datetime'].dt.date
-    data['year'] = data['datetime'].dt.year
-    data['hour'] = data['datetime'].dt.hour
-    data['Type'] = data['Type'].astype('category')
+  print("Preprocessing data...")
+  data['datetime'] = pd.to_datetime(data['timestamp'], unit='s')
+  data['date'] = data['datetime'].dt.date
+  data['year'] = data['datetime'].dt.year
+  data['hour'] = data['datetime'].dt.hour
+  data['Type'] = data['Type'].astype('category')
 
-    # Ottieni la lista degli anni presenti nei dati
-    years = sorted(data['year'].unique())
+  # Ottieni la lista degli anni presenti nei dati
+  years = sorted(data['year'].unique())
 
-    # Prepara i dati per ogni anno
-    year_data_list = []
-    for year in years:
-        year_data = data[data['year'] == year]
-        year_data_list.append((year, year_data, results_dir))
+  # Prepara i dati per ogni anno
+  year_data_list = []
+  for year in years:
+    year_data = data[data['year'] == year]
+    year_data_list.append((year, year_data, results_dir))
 
-    print("Processing data for each year in parallel...")
-    with mp.Pool(processes=min(len(years), mp.cpu_count())) as pool:
-        pool.map(process_year_data, year_data_list)
+  print("Processing data for each year in parallel...")
+  with mp.Pool(processes=min(len(years), mp.cpu_count())) as pool:
+    pool.map(process_year_data, year_data_list)
 
-    print(f"All results have been saved in the folder '{results_dir}'.")
+  print(f"All results have been saved in the folder '{results_dir}'.")
