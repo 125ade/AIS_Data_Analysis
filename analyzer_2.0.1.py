@@ -430,10 +430,11 @@ def create_unique_directory(
   """Crea una directory unica per salvare i risultati."""
   if not os.path.exists(base_path):
     os.makedirs(base_path)
-
+  
   n = 1
-  while os.path.exists(os.path.join(base_path, f"{prefix}_{n}")):
-    n += 1
+  if os.path.exists(os.path.join(base_path, f"{prefix}_{n}")):
+    while os.path.exists(os.path.join(base_path, f"{prefix}_{n}")):
+      n += 1
 
   unique_directory = os.path.join(base_path, f"{prefix}_{n}")
   os.makedirs(unique_directory)
