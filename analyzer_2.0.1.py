@@ -6,6 +6,7 @@ Inoltre, è stata aggiunta una legenda dei colori dei tipi di nave.
 
 import os
 import multiprocessing as mp
+import sys
 import pandas as pd
 import numpy as np
 import matplotlib
@@ -422,7 +423,10 @@ PORT_GEOJSON = {
 }
 
 
-def create_unique_directory(base_path="results", prefix="analysis"):
+def create_unique_directory(
+        base_path="results",
+        prefix=f"analysis_{os.path.splitext(os.path.basename(sys.argv[0]))[0].split('_')[-1]}"
+):
   """Crea una directory unica per salvare i risultati."""
   if not os.path.exists(base_path):
     os.makedirs(base_path)
@@ -645,7 +649,7 @@ if __name__ == '__main__':
 
   dataset_folder = r'dataset/AIS_Dataset_csv'  # Assicurati che il percorso sia corretto
   csv_files = [os.path.join(dataset_folder, f) for f in os.listdir(dataset_folder) if f.endswith('.csv')]
-  # csv_files = csv_files[:1]  # Commenta o rimuovi questa linea per elaborare tutti i file
+  csv_files = csv_files[:1]  # Commenta o rimuovi questa linea per elaborare tutti i file
   if not csv_files:
     raise FileNotFoundError(f"No CSV files found in the folder {dataset_folder}. Please check the path.")
 
