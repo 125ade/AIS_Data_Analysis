@@ -1,27 +1,424 @@
 """
-Script ottimizzato per generare grafici e heatmap giornaliere per ogni anno in parallelo,
-includendo la geometria del porto di Ancona e un'icona per l'antenna AIS.
-Se il caricamento della mappa fallisce, visualizza i contorni della costa e del porto.
+Script per generare grafici, heatmap e mappe interattive giornaliere.
+Le mappe includono geometrie dettagliate del porto, con colorazione per tipo di nave e popup con informazioni sui punti
+quando MMSI è 0.
 """
 
 import os
 import multiprocessing as mp
-import matplotlib
-matplotlib.use('Agg')  # Usa backend non interattivo per l'esecuzione dello script
-
-import pyproj
-os.environ['PROJ_LIB'] = pyproj.datadir.get_data_dir()
-
 import pandas as pd
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')  # Usa backend non interattivo per prevenire errori legati a Tcl/Tk
 import matplotlib.pyplot as plt
 import seaborn as sns
 import geopandas as gpd
-from shapely.geometry import Point, Polygon
-import contextily as ctx
-from scipy.stats import gaussian_kde
-from pyproj import Transformer
+from shapely.geometry import shape
 from tqdm import tqdm
+import folium
+import json
+
+ais_antenna_coords = [43.58693627326397, 13.51656777958965]  # Lat, Lon dell'antenna AIS
+# GeoJSON del porto
+PORT_GEOJSON = {
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "porto commerciale"
+      },
+      "geometry": {
+        "coordinates": [
+          [
+            [
+              13.504509281247067,
+              43.61303229602851
+            ],
+            [
+              13.50444886853657,
+              43.61329028467097
+            ],
+            [
+              13.5049624971183,
+              43.61392946547258
+            ],
+            [
+              13.504946191446976,
+              43.61439240170344
+            ],
+            [
+              13.504758676249935,
+              43.61484046298213
+            ],
+            [
+              13.504298041094728,
+              43.61526544846015
+            ],
+            [
+              13.504440715700298,
+              43.61575240729442
+            ],
+            [
+              13.50582672524817,
+              43.61729562313022
+            ],
+            [
+              13.50570443272889,
+              43.61741662130518
+            ],
+            [
+              13.505965323436016,
+              43.617561228561215
+            ],
+            [
+              13.505133734306867,
+              43.61843328430052
+            ],
+            [
+              13.50550061186459,
+              43.61888775539188
+            ],
+            [
+              13.507918410553884,
+              43.618566084649416
+            ],
+            [
+              13.508215989017117,
+              43.61975537248219
+            ],
+            [
+              13.50848503255969,
+              43.61988816991146
+            ],
+            [
+              13.508608225374275,
+              43.62038987619593
+            ],
+            [
+              13.506703519544743,
+              43.62061684667057
+            ],
+            [
+              13.50674767840917,
+              43.62083693122386
+            ],
+            [
+              13.506484423640273,
+              43.62086766922522
+            ],
+            [
+              13.506498010982767,
+              43.62091316143949
+            ],
+            [
+              13.507431371205627,
+              43.620780765815255
+            ],
+            [
+              13.507505046117672,
+              43.62110839339081
+            ],
+            [
+              13.509068006745451,
+              43.62092743652022
+            ],
+            [
+              13.509233775297247,
+              43.62152744931541
+            ],
+            [
+              13.509141208059816,
+              43.62218403387487
+            ],
+            [
+              13.507669991905885,
+              43.622066120782875
+            ],
+            [
+              13.507522870289904,
+              43.62239323395272
+            ],
+            [
+              13.508715606243783,
+              43.6229637759196
+            ],
+            [
+              13.508510686850144,
+              43.623233830563066
+            ],
+            [
+              13.506760205902992,
+              43.62394203082408
+            ],
+            [
+              13.506973813958155,
+              43.6248902280833
+            ],
+            [
+              13.506226764728183,
+              43.62495413047563
+            ],
+            [
+              13.505621456831989,
+              43.62462733374096
+            ],
+            [
+              13.504527288756037,
+              43.623128093959224
+            ],
+            [
+              13.50358943040385,
+              43.62349583547979
+            ],
+            [
+              13.504624982333553,
+              43.62507992708237
+            ],
+            [
+              13.504410056462177,
+              43.62516478795442
+            ],
+            [
+              13.5008002817913,
+              43.62487157919165
+            ],
+            [
+              13.497661084556142,
+              43.62572501974131
+            ],
+            [
+              13.494026411994355,
+              43.62549293021135
+            ],
+            [
+              13.49072313165675,
+              43.62820625240431
+            ],
+            [
+              13.484487866532731,
+              43.621005251042675
+            ],
+            [
+              13.489637349559615,
+              43.615665180034284
+            ],
+            [
+              13.490945596598635,
+              43.61604806883244
+            ],
+            [
+              13.493450750504138,
+              43.61945365665014
+            ],
+            [
+              13.493283740243953,
+              43.62019923297919
+            ],
+            [
+              13.495454873628177,
+              43.622395606805895
+            ],
+            [
+              13.496178584755597,
+              43.619776069169916
+            ],
+            [
+              13.498433223270837,
+              43.6200984799616
+            ],
+            [
+              13.497987862576082,
+              43.622456056327024
+            ],
+            [
+              13.49876724379115,
+              43.622234407785015
+            ],
+            [
+              13.499296109615045,
+              43.620400738507925
+            ],
+            [
+              13.50263631482241,
+              43.61764005400991
+            ],
+            [
+              13.5016899233471,
+              43.6170153559907
+            ],
+            [
+              13.50271981995246,
+              43.61600776486324
+            ],
+            [
+              13.501355902825765,
+              43.61512107070553
+            ],
+            [
+              13.501876311172708,
+              43.613102692454675
+            ],
+            [
+              13.504509281247067,
+              43.61303229602851
+            ]
+          ]
+        ],
+        "type": "Polygon"
+      },
+      "id": 0
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "porto Marina Dorica"
+      },
+      "geometry": {
+        "coordinates": [
+          [
+            [
+              13.481774376708785,
+              43.60725294555081
+            ],
+            [
+              13.49036836767985,
+              43.60691998305424
+            ],
+            [
+              13.495961055305145,
+              43.60820943126123
+            ],
+            [
+              13.50015666103917,
+              43.61046252809024
+            ],
+            [
+              13.490072293087792,
+              43.615440113472914
+            ],
+            [
+              13.48947288289125,
+              43.61566825442378
+            ],
+            [
+              13.489207389334354,
+              43.61562150746752
+            ],
+            [
+              13.488925394681871,
+              43.614489634272616
+            ],
+            [
+              13.488168614442799,
+              43.61392642457611
+            ],
+            [
+              13.485863577387647,
+              43.61210264232349
+            ],
+            [
+              13.484312663433712,
+              43.61162415328829
+            ],
+            [
+              13.481895256305194,
+              43.61140868842091
+            ],
+            [
+              13.480332884385035,
+              43.61153471670434
+            ],
+            [
+              13.479846085258743,
+              43.611037462191206
+            ],
+            [
+              13.480781218824745,
+              43.60802950173462
+            ],
+            [
+              13.48073026435597,
+              43.607944643479755
+            ],
+            [
+              13.480714978015328,
+              43.6074748463389
+            ],
+            [
+              13.480971448839227,
+              43.60733218470105
+            ],
+            [
+              13.481774376708785,
+              43.60725294555081
+            ]
+          ]
+        ],
+        "type": "Polygon"
+      },
+      "id": 1
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Fincantieri"
+      },
+      "geometry": {
+        "coordinates": [
+          [
+            [
+              13.505189782584836,
+              43.625339842782125
+            ],
+            [
+              13.506093727335838,
+              43.627629973726215
+            ],
+            [
+              13.502772712926173,
+              43.62842652055886
+            ],
+            [
+              13.502812014871836,
+              43.62892435696901
+            ],
+            [
+              13.50153470163798,
+              43.629251504365016
+            ],
+            [
+              13.500473549104413,
+              43.6300907004115
+            ],
+            [
+              13.499078330033683,
+              43.629251504365016
+            ],
+            [
+              13.497683110961532,
+              43.62590882755987
+            ],
+            [
+              13.500846917588603,
+              43.62509802262102
+            ],
+            [
+              13.503224685301689,
+              43.62532561809374
+            ],
+            [
+              13.505189782584836,
+              43.625339842782125
+            ]
+          ]
+        ],
+        "type": "Polygon"
+      },
+      "id": 2
+    }
+  ]
+}
 
 
 def create_unique_directory(base_path="results", prefix="analysis"):
@@ -44,23 +441,22 @@ def load_csv(file):
 
 
 def process_year_data(year_data_tuple):
-    """Processa i dati per un anno specifico: genera grafici e heatmap giornaliere."""
+    """Processa i dati per un anno specifico: genera grafici, heatmap e mappe interattive."""
     year, data, results_dir = year_data_tuple
     year_dir = os.path.join(results_dir, str(year))
     os.makedirs(year_dir, exist_ok=True)
 
-    # Generazione dei grafici per l'anno
+    # Genera grafici per l'anno
     generate_yearly_plots(data, year_dir, year)
 
-    # Generazione delle heatmap giornaliere
-    calculate_daily_heatmaps_for_year(data, year_dir, year)
+    # Genera mappe interattive giornaliere
+    generate_daily_maps_for_year(data, year_dir, year)
 
 
 def generate_yearly_plots(data, year_dir, year):
     """Genera i grafici per un anno specifico."""
     print(f"Generating plots for year {year}...")
 
-    # Barra di avanzamento per i grafici
     plot_tasks = [
         ("Vessel Type Distribution", plot_vessel_type_distribution),
         ("Distance Distribution", plot_distance_distribution),
@@ -143,122 +539,67 @@ def plot_hourly_messages(data, results_dir, year):
     plt.close()
 
 
-def calculate_daily_heatmaps_for_year(data, year_dir, year):
-    """Genera heatmap per ogni giorno di un anno specifico."""
+def generate_daily_maps_for_year(data, year_dir, year):
+    """Genera mappe interattive giornaliere per ogni anno specifico."""
     dates = sorted(data['date'].unique())
-    total_days = len(dates)
 
-    # Coordinate del porto di Ancona e dell'antenna AIS
-    ancona_port_polygon = Polygon([
-        (13.5040, 43.6190), (13.5120, 43.6190),
-        (13.5120, 43.6230), (13.5040, 43.6230),
-        (13.5040, 43.6190)
-    ])
-    ancona_port_polygon = gpd.GeoSeries([ancona_port_polygon], crs="EPSG:4326").to_crs("EPSG:3857")
-    ancona_port_polygon_x, ancona_port_polygon_y = ancona_port_polygon[0].exterior.xy
+    # Crea una mappa centrata sull'antenna AIS
 
-    ais_antenna_lon, ais_antenna_lat = 13.5167, 43.6167  # Antenna AIS di Ancona
 
-    print(f"Generating daily heatmaps for year {year}...")
+    print(f"Generating daily maps for year {year}...")
     for date in tqdm(dates, desc=f"Year {year}", unit="day"):
         day_data = data[data['date'] == date]
 
+        # Controlla se ci sono abbastanza dati per generare la mappa
         day_data = day_data.dropna(subset=['Longitude', 'Latitude'])
-        day_data = day_data[(day_data['Latitude'] >= -90) & (day_data['Latitude'] <= 90)]
-        day_data = day_data[(day_data['Longitude'] >= -180) & (day_data['Longitude'] <= 180)]
-
         if day_data.empty:
             continue
 
-        # Controlla se ci sono abbastanza punti unici per calcolare la densità
-        unique_points = day_data[['Longitude', 'Latitude']].drop_duplicates()
-        if unique_points.shape[0] < 2:
-            print(f"Not enough unique points to calculate KDE for date {date}. Skipping.")
-            continue
+        # Crea la mappa
+        m = folium.Map(location=ais_antenna_coords, zoom_start=13)
 
-        # Creazione della geometria
-        geometry = [Point(xy) for xy in zip(day_data['Longitude'], day_data['Latitude'])]
-        crs_wgs84 = 'EPSG:4326'
-        crs_web_mercator = 'EPSG:3857'
+        # Aggiungi poligoni del porto
+        for feature in PORT_GEOJSON['features']:
+            geom = shape(feature['geometry'])
+            name = feature['properties']['name']
+            folium.GeoJson(
+                geom,
+                name=name,
+                style_function=lambda x: {
+                    "fillColor": "gray",
+                    "color": "black",
+                    "weight": 2,
+                    "fillOpacity": 0.4,
+                },
+            ).add_to(m)
 
-        geo_data = gpd.GeoDataFrame(day_data, geometry=geometry, crs=crs_wgs84)
-        geo_data = geo_data.to_crs(crs_web_mercator)
-
-        # Converti le coordinate dell'antenna AIS in EPSG:3857
-        transformer = Transformer.from_crs(crs_wgs84, crs_web_mercator, always_xy=True)
-        ais_antenna_x, ais_antenna_y = transformer.transform(ais_antenna_lon, ais_antenna_lat)
-
-        # Definizione dell'area di Ancona
-        buffer_size = 10000  # in metri
-        x_min, x_max = geo_data.total_bounds[0] - buffer_size, geo_data.total_bounds[2] + buffer_size
-        y_min, y_max = geo_data.total_bounds[1] - buffer_size, geo_data.total_bounds[3] + buffer_size
-
-        geo_data_ancona = geo_data.cx[x_min:x_max, y_min:y_max]
-        if geo_data_ancona.empty:
-            continue
-
-        x = geo_data_ancona.geometry.x
-        y = geo_data_ancona.geometry.y
-        xy_coords = np.vstack([x, y])
-
-        # Aggiungi un blocco try-except per gestire l'eccezione
-        try:
-            kde = gaussian_kde(xy_coords)
-            z = kde(xy_coords)
-        except np.linalg.LinAlgError as e:
-            print(f"LinAlgError for date {date}: {e}. Skipping this date.")
-            continue
-
-        # Creazione della figura
-        fig, ax = plt.subplots(figsize=(10, 10))
-        scatter = ax.scatter(x, y, c=z, s=10, cmap='viridis')
-        ax.set_xlim([x_min, x_max])
-        ax.set_ylim([y_min, y_max])
-
-        # Aggiungi la mappa di base con fallback per eventuali errori
-        # map_loaded = False
-        # try:
-        #     ctx.add_basemap(ax, source=ctx.providers['OpenStreetMap.Mapnik'], crs=crs_web_mercator)
-        #     map_loaded = True
-        # except Exception as e:
-        #     print(f"Failed to add OpenStreetMap basemap for {date}: {e}. Retrying with Stamen.TonerLite...")
-        #     try:
-        #         ctx.add_basemap(ax, source=ctx.providers['Stamen.TonerLite'], crs=crs_web_mercator)
-        #         map_loaded = True
-        #     except Exception as e2:
-        #         print(f"Failed to add Stamen basemap for {date}: {e2}. Using fallback contours.")
-
-        #if not map_loaded:
-        #    # Disegna il contorno del porto e della costa
-        #    ax.plot(ancona_port_polygon_x, ancona_port_polygon_y, color='black', linestyle='--', label='Porto di Ancona (contorno)')
-        # Disegna il poligono del porto di Ancona con trasparenza e linea continua
-        ax.fill(
-            ancona_port_polygon_x,
-            ancona_port_polygon_y,
-            color='black',
-            alpha=0.3,  # 70% trasparente (1 - 0.3 = 70%)
-            label='Porto di Ancona'
-        )
-        # Aggiungi il contorno del poligono con una linea continua
-        ax.plot(
-            ancona_port_polygon_x,
-            ancona_port_polygon_y,
-            color='black',
-            linestyle='-',
-            linewidth=1
-        )
         # Aggiungi marker per l'antenna AIS
-        ax.scatter(ais_antenna_x, ais_antenna_y, color='blue', label='Antenna AIS', s=100, marker='^')
+        folium.Marker(
+            location=ais_antenna_coords,
+            icon=folium.Icon(color='blue', icon='info-sign'),
+            popup="Antenna AIS"
+        ).add_to(m)
 
-        # Aggiungi la legenda
-        ax.legend(loc='upper right')
+        # Aggiungi punti delle navi con colorazione basata sul tipo
+        colors = sns.color_palette("husl", len(day_data['Type'].unique())).as_hex()
+        type_colors = {v_type: color for v_type, color in zip(day_data['Type'].unique(), colors)}
 
-        # Titolo e salvataggio della figura
-        ax.set_title(f'Heatmap of Vessel Positions near Ancona (Date: {date})')
-        plt.colorbar(scatter, ax=ax, label='Density')
-        plt.tight_layout()
-        plt.savefig(os.path.join(year_dir, f'heatmap_ancona_{date}.png'))
-        plt.close()
+        for _, row in day_data.iterrows():
+            popup_text = None
+            if row['MMSI'] == 0:
+                popup_text = "<br>".join([f"{col}: {row[col]}" for col in day_data.columns])
+            folium.CircleMarker(
+                location=[row['Latitude'], row['Longitude']],
+                radius=3,
+                color=type_colors.get(row['Type'], 'gray'),
+                fill=True,
+                fill_opacity=0.7,
+                popup=popup_text
+            ).add_to(m)
+
+        # Salva la mappa come file HTML
+        map_path = os.path.join(year_dir, f"map_{date}.html")
+        m.save(map_path)
 
 
 if __name__ == '__main__':
@@ -270,7 +611,6 @@ if __name__ == '__main__':
     dataset_folder = r'dataset/AIS_Dataset_csv'  # Assicurati che il percorso sia corretto
     csv_files = [os.path.join(dataset_folder, f) for f in os.listdir(dataset_folder) if f.endswith('.csv')]
     csv_files = csv_files[:1]
-
     if not csv_files:
         raise FileNotFoundError(f"No CSV files found in the folder {dataset_folder}. Please check the path.")
 
@@ -288,45 +628,6 @@ if __name__ == '__main__':
     data['year'] = data['datetime'].dt.year
     data['hour'] = data['datetime'].dt.hour
     data['Type'] = data['Type'].astype('category')
-
-    # Verifica se le colonne 'Distance' e 'Bearing' esistono, altrimenti le calcola
-    if 'Distance' not in data.columns or 'Bearing' not in data.columns:
-        print("Calculating Distance and Bearing...")
-        # Supponendo che i dati siano ordinati per nave e per tempo
-        data.sort_values(by=['MMSI', 'datetime'], inplace=True)
-        data['prev_Latitude'] = data.groupby('MMSI')['Latitude'].shift()
-        data['prev_Longitude'] = data.groupby('MMSI')['Longitude'].shift()
-
-        # Calcolo della distanza e dell'angolo di rotta
-        def haversine(lon1, lat1, lon2, lat2):
-            R = 6371000  # Raggio della Terra in metri
-            phi1 = np.radians(lat1)
-            phi2 = np.radians(lat2)
-            delta_phi = np.radians(lat2 - lat1)
-            delta_lambda = np.radians(lon2 - lon1)
-
-            a = np.sin(delta_phi / 2) ** 2 + \
-                np.cos(phi1) * np.cos(phi2) * np.sin(delta_lambda / 2) ** 2
-            c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
-            meters = R * c
-            return meters
-
-        data['Distance'] = haversine(
-            data['prev_Longitude'], data['prev_Latitude'],
-            data['Longitude'], data['Latitude']
-        )
-
-        data['Bearing'] = np.degrees(np.arctan2(
-            np.sin(np.radians(data['Longitude'] - data['prev_Longitude'])) * np.cos(np.radians(data['Latitude'])),
-            np.cos(np.radians(data['prev_Latitude'])) * np.sin(np.radians(data['Latitude'])) -
-            np.sin(np.radians(data['prev_Latitude'])) * np.cos(np.radians(data['Latitude'])) *
-            np.cos(np.radians(data['Longitude'] - data['prev_Longitude']))
-        ))
-
-        # Pulisce valori infiniti o NaN
-        data['Distance'].replace([np.inf, -np.inf], np.nan, inplace=True)
-        data['Bearing'].replace([np.inf, -np.inf], np.nan, inplace=True)
-        data.dropna(subset=['Distance', 'Bearing'], inplace=True)
 
     # Ottieni la lista degli anni presenti nei dati
     years = sorted(data['year'].unique())
