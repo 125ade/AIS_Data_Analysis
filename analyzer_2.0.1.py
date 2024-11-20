@@ -1160,7 +1160,8 @@ def generate_daily_maps_for_year(data, year_dir, year):
         'Type': row['Type'],
         'Latitude': row['Latitude'],
         'Longitude': row['Longitude'],
-        'Datetime': row['datetime']
+        'Datetime': row['datetime'],
+        'Country': row['Country']
       }
       popup_text = "<br>".join([f"{k}: {v}" for k, v in popup_info.items()])
 
@@ -1245,6 +1246,12 @@ if __name__ == '__main__':
   data['year'] = data['datetime'].dt.year
   data['hour'] = data['datetime'].dt.hour
   data['Type'] = data['Type'].astype('category')
+
+  print("Preprocessing Country...")
+  # Estrarre il MID e mappare al paese di origine
+  data['MID'] = data['MMSI'].astype(str).str[:3]
+  data['Country'] = data['MID'].map(MID_COUNTRY_MAP)
+  data['Country'] = data['Country'].fillna('Unknown')
 
   # Filtraggio dei valori di Longitude e Latitude cioè selezione area di interesse
 
