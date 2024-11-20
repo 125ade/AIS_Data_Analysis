@@ -744,7 +744,7 @@ if __name__ == '__main__':
   parser.add_argument('-t', '--test', action='store_true',
                       help="Get only the first file from the dataset for test porpoise for the script")
   parser.add_argument('-d', '--dataset', default=r'dataset/AIS_Dataset_csv',
-                      help="set the dataset folder")
+                      help="Set the dataset folder")
   args = parser.parse_args()
   no_maps = args.no_maps
   test = args.test
