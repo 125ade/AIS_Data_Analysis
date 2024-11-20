@@ -4,6 +4,7 @@ Le mappe includono geometrie dettagliate del porto, con colorazione per tipo di 
 Inoltre, è stata aggiunta una legenda dei colori dei tipi di nave.
 """
 
+import argparse
 import os
 import multiprocessing as mp
 import sys
@@ -14,13 +15,34 @@ matplotlib.use('Agg')  # Usa backend non interattivo per prevenire errori legati
 import matplotlib.pyplot as plt
 import seaborn as sns
 import geopandas as gpd
-from shapely.geometry import shape
+from shapely.geometry import shape, Point, Polygon
 from tqdm import tqdm
 import folium
 import json
 from branca.element import Template, MacroElement
 
 ais_antenna_coords = [43.58693627326397, 13.51656777958965]  # Lat, Lon dell'antenna AIS
+
+# Definizione del poligono dal GeoJSON AREA DI INTERESSE di prova
+# polygon_coords = [
+#     [14, 42],
+#     [15, 44],
+#     [12, 46],
+#     [12, 44],
+#     [14, 42]
+# ]
+
+polygon_coords = [
+    [13.627332698482832, 46.01607627362711], # Punto iniziale del poligono
+    [11.827331194451205, 45.56839707274841],
+    [12.206288202161488, 44.06768319786181],
+    [13.437866762923107, 43.47479960302897],
+    [14.06942488652328, 42.20912261569302],
+    [16.364148350192465, 43.688312063316346],
+    [14.522085391698596, 44.50473436137818],
+    [13.627332698482832, 46.01607627362711]  # Punto finale chiude il poligono
+]
+
 # GeoJSON del porto
 PORT_GEOJSON = {
   "type": "FeatureCollection",
@@ -423,16 +445,14 @@ PORT_GEOJSON = {
 }
 
 
-def create_unique_directory(
-        base_path="results",
-        prefix=f"analysis_{os.path.splitext(os.path.basename(sys.argv[0]))[0].split('_')[-1]}"
-):
+def create_unique_directory(base_path="results", prefix=f"analysis_{os.path.splitext(os.path.basename(sys.argv[0]))[0].split('_')[-1]}"):
   """Crea una directory unica per salvare i risultati."""
   if not os.path.exists(base_path):
     os.makedirs(base_path)
-  
+
   n = 1
   if os.path.exists(os.path.join(base_path, f"{prefix}_{n}")):
+    n += 1
     while os.path.exists(os.path.join(base_path, f"{prefix}_{n}")):
       n += 1
 
@@ -447,16 +467,17 @@ def load_csv(file):
 
 
 def process_year_data(year_data_tuple):
-  """Processa i dati per un anno specifico: genera grafici, heatmap e mappe interattive."""
-  year, data, results_dir = year_data_tuple
+  """Processa i dati per un anno specifico: genera grafici e mappe interattive."""
+  year, data, results_dir, no_maps = year_data_tuple
   year_dir = os.path.join(results_dir, str(year))
   os.makedirs(year_dir, exist_ok=True)
 
   # Genera grafici per l'anno
   generate_yearly_plots(data, year_dir, year)
 
-  # Genera mappe interattive giornaliere
-  generate_daily_maps_for_year(data, year_dir, year)
+  # Genera mappe interattive giornaliere solo se no_maps è False
+  if not no_maps:
+    generate_daily_maps_for_year(data, year_dir, year)
 
 
 def generate_yearly_plots(data, year_dir, year):
@@ -467,8 +488,11 @@ def generate_yearly_plots(data, year_dir, year):
     ("Vessel Type Distribution", plot_vessel_type_distribution),
     ("Distance Distribution", plot_distance_distribution),
     ("Bearing Distribution", plot_bearing_distribution),
+    ("Bearing Polar Distribution", plot_polar_bearing_distribution),
     ("Daily Messages", plot_daily_messages),
     ("Hourly Messages", plot_hourly_messages),
+    ("Longitude Distribution", plot_longitude_distribution),
+    ("Latitude Distribution", plot_latitude_distribution),
   ]
 
   for plot_name, plot_func in plot_tasks:
@@ -476,27 +500,65 @@ def generate_yearly_plots(data, year_dir, year):
     plot_func(data, year_dir, year)
 
 
+def plot_longitude_distribution(data, results_dir, year):
+  """Plot della distribuzione della longitudine per anno"""""
+  if 'Longitude' in data.columns:
+    plt.figure(figsize=(10, 6))
+    sns.histplot(data['Longitude'].dropna(), bins=180, kde=True)
+    plt.title(f'Distribution of Longitude for the Year {year}')
+    plt.xlabel('Longitude')
+    plt.yscale('log')
+    plt.ylabel('Count (Log)')
+    plt.tight_layout()
+    plt.savefig(os.path.join(results_dir, f'Longitude_distribution_{year}.png'))
+    plt.close()
+  else:
+    print(f"Longitude column not found for year {year}. Skipping distance distribution plot.")
+
+
+def plot_latitude_distribution(data, results_dir, year):
+  """Plot della distribuzione della latitudine per anno"""""
+  if 'Latitude' in data.columns:
+    plt.figure(figsize=(10, 6))
+    sns.histplot(data['Latitude'].dropna(), bins=180, kde=True)
+    plt.title(f'Distribution of Latitude for the Year {year}')
+    plt.xlabel('Latitude')
+    plt.yscale('log')
+    plt.ylabel('Count (Log)')
+    plt.tight_layout()
+    plt.savefig(os.path.join(results_dir, f'Latitude_distribution_{year}.png'))
+    plt.close()
+  else:
+    print(f"Latitude column not found for year {year}. Skipping distance distribution plot.")
+
+
 def plot_vessel_type_distribution(data, results_dir, year):
-  """Plot della distribuzione dei tipi di nave."""
-  type_counts = data['Type'].value_counts()
-  plt.figure(figsize=(10, 6))
-  sns.countplot(x='Type', data=data, order=type_counts.index)
-  plt.title(f'Distribution of Vessel Types ({year})')
-  plt.xlabel('Vessel Type')
-  plt.ylabel('Count')
-  plt.tight_layout()
-  plt.savefig(os.path.join(results_dir, f'vessel_type_distribution_{year}.png'))
-  plt.close()
+  """Plot della distribuzione dei tipi di nave conta ogni MMSI una sola volta."""
+  if 'Type' in data.columns:
+    unique_data = data.drop_duplicates(subset='MMSI')
+    type_counts = unique_data['Type'].value_counts()
+    plt.figure(figsize=(10, 6))
+    sns.countplot(x='Type', data=unique_data, order=type_counts.index)
+    plt.title(f'Distribution of Vessel Types for the Year {year}')
+    plt.xlabel('Vessel Type')
+    plt.yscale('log')
+    plt.ylabel('Count each MMSI only once (Log)')
+    plt.tight_layout()
+    plt.savefig(os.path.join(results_dir, f'vessel_type_distribution_{year}.png'))
+    plt.close()
+  else:
+    print(f"Type column not found for year {year}. Skipping distance distribution plot.")
 
 
 def plot_distance_distribution(data, results_dir, year):
-  """Plot della distribuzione delle distanze."""
+  """Plot della distribuzione delle distanze di tutti i punti."""
   if 'Distance' in data.columns:
     plt.figure(figsize=(10, 6))
-    sns.histplot(data['Distance'], bins=50, kde=True)
-    plt.title(f'Distribution of Distances ({year})')
+    sns.histplot(data['Distance'], bins=1000, kde=True)
+    plt.title(f'Distribution of Distances for the Year {year}')
     plt.xlabel('Distance')
-    plt.ylabel('Count')
+    plt.yscale('log')
+    plt.ylabel('Count (Log)')
     plt.tight_layout()
     plt.savefig(os.path.join(results_dir, f'distance_distribution_{year}.png'))
     plt.close()
@@ -505,13 +567,14 @@ def plot_distance_distribution(data, results_dir, year):
 
 
 def plot_bearing_distribution(data, results_dir, year):
-  """Plot della distribuzione delle direzioni."""
+  """Plot della distribuzione degli angoli di tutti i punti rispetto all'antenna."""
   if 'Bearing' in data.columns:
     plt.figure(figsize=(10, 6))
-    sns.histplot(data['Bearing'], bins=36, kde=True)
-    plt.title(f'Distribution of Bearings ({year})')
+    sns.histplot(data['Bearing'], bins=360, color='orange', alpha=0.75, kde=True)
+    plt.title(f'Distribution of Bearings for the Year {year}')
     plt.xlabel('Bearing')
-    plt.ylabel('Count')
+    plt.yscale('log')
+    plt.ylabel('Count (Log)')
     plt.tight_layout()
     plt.savefig(os.path.join(results_dir, f'bearing_distribution_{year}.png'))
     plt.close()
@@ -519,14 +582,46 @@ def plot_bearing_distribution(data, results_dir, year):
     print(f"Bearing column not found for year {year}. Skipping bearing distribution plot.")
 
 
+def plot_polar_bearing_distribution(data, results_dir, year):
+  """Plot della distribuzione degli angoli di tutti i punti rispetto all'antenna in forma polare."""
+  if 'Bearing' in data.columns:
+    # Dati del bearing
+    bearing_data = data['Bearing']
+
+    # Conversione dei dati in radianti
+    bearing_radians = np.deg2rad(bearing_data)
+
+    # Creazione di un grafico polare
+    plt.figure(figsize=(8, 8))
+    ax = plt.subplot(111, polar=True)
+
+    # Creazione dell'istogramma radiale
+    n, bins, patches = ax.hist(
+      bearing_radians, bins=360, color='orange', alpha=0.75
+    )
+
+    # Personalizzazione del grafico
+    # ax.set_yscale('log')
+    ax.set_theta_zero_location("N")  # Imposta il Nord (0°) in alto
+    ax.set_theta_direction(-1)  # Imposta la direzione in senso orario
+    ax.set_title(f'Distribution of Bearings for the Year {year}', va='bottom', fontsize=14)
+
+    # Salvataggio del grafico
+    radial_plot_path = os.path.join(results_dir, "bearing_radial_distribution.png")
+    plt.savefig(radial_plot_path)
+    plt.close()
+  else:
+    print(f"Bearing column not found for year {year}. Skipping polar bearing distribution plot.")
+
+
 def plot_daily_messages(data, results_dir, year):
   """Plot del numero di messaggi per giorno."""
   daily_counts = data.groupby('date').size()
   plt.figure(figsize=(12, 6))
   daily_counts.plot()
-  plt.title(f'Number of AIS Messages per Day ({year})')
+  plt.title(f'Number of AIS Messages per Day of the Year {year}')
   plt.xlabel('Date')
-  plt.ylabel('Number of Messages')
+  plt.ylabel('Count')
   plt.tight_layout()
   plt.savefig(os.path.join(results_dir, f'daily_messages_{year}.png'))
   plt.close()
@@ -537,9 +632,9 @@ def plot_hourly_messages(data, results_dir, year):
   hourly_counts = data.groupby('hour').size()
   plt.figure(figsize=(10, 6))
   hourly_counts.plot(kind='bar')
-  plt.title(f'Number of AIS Messages per Hour ({year})')
+  plt.title(f'Number of AIS Messages per Hour of the Year {year}')
   plt.xlabel('Hour of the Day')
-  plt.ylabel('Number of Messages')
+  plt.ylabel('Count')
   plt.tight_layout()
   plt.savefig(os.path.join(results_dir, f'hourly_messages_{year}.png'))
   plt.close()
@@ -643,6 +738,12 @@ def generate_daily_maps_for_year(data, year_dir, year):
 
 
 if __name__ == '__main__':
+  parser = argparse.ArgumentParser(description="analysis AIS Dataset")
+  parser.add_argument('-nm', '--no-maps', action='store_true',
+                      help="Disables the creation of maps during processing.")
+  args = parser.parse_args()
+  no_maps = args.no_maps
+
   mp.freeze_support()  # Necessario per Windows
   mp.set_start_method('spawn')  # Compatibilità con Windows
 
@@ -669,6 +770,19 @@ if __name__ == '__main__':
   data['hour'] = data['datetime'].dt.hour
   data['Type'] = data['Type'].astype('category')
 
+  # Filtraggio dei valori di Longitude e Latitude cioè selezione area di interesse
+  area_polygon = Polygon(polygon_coords)
+
+  # Filtraggio dei dati per verificare se i punti sono dentro il poligono
+  print("Filtering data by polygon area...")
+  initial_row_count = len(data)
+
+  # Verifica riga per riga
+  data = data[data.apply(lambda row: area_polygon.contains(Point(row['Longitude'], row['Latitude'])), axis=1)]
+
+  filtered_row_count = len(data)
+  print(f"Filtered out {initial_row_count - filtered_row_count} rows based on polygon constraints.")
+
   # Ottieni la lista degli anni presenti nei dati
   years = sorted(data['year'].unique())
 
@@ -676,10 +790,36 @@ if __name__ == '__main__':
   year_data_list = []
   for year in years:
     year_data = data[data['year'] == year]
-    year_data_list.append((year, year_data, results_dir))
+    year_data_list.append((year, year_data, results_dir, no_maps))
 
   print("Processing data for each year in parallel...")
   with mp.Pool(processes=min(len(years), mp.cpu_count())) as pool:
     pool.map(process_year_data, year_data_list)
 
   print(f"All results have been saved in the folder '{results_dir}'.")
+
+# todo guarda qui maps filtrare i fari e selezionare l'area di osservazione
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
