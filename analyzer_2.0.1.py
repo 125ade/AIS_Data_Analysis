@@ -741,17 +741,25 @@ if __name__ == '__main__':
   parser = argparse.ArgumentParser(description="analysis AIS Dataset")
   parser.add_argument('-nm', '--no-maps', action='store_true',
                       help="Disables the creation of maps during processing.")
+  parser.add_argument('-t', '--test', action='store_true',
+                      help="Get only the first file from the dataset for test porpoise for the script")
+  parser.add_argument('-d', '--dataset', default=r'dataset/AIS_Dataset_csv',
+                      help="set the dataset folder")
   args = parser.parse_args()
   no_maps = args.no_maps
+  test = args.test
+  dataset = args.dataset
 
   mp.freeze_support()  # Necessario per Windows
   mp.set_start_method('spawn')  # Compatibilità con Windows
 
   results_dir = create_unique_directory()
 
-  dataset_folder = r'dataset/AIS_Dataset_csv'  # Assicurati che il percorso sia corretto
+  dataset_folder =dataset
   csv_files = [os.path.join(dataset_folder, f) for f in os.listdir(dataset_folder) if f.endswith('.csv')]
-  csv_files = csv_files[:1]  # Commenta o rimuovi questa linea per elaborare tutti i file
+  if test:
+    csv_files = csv_files[:1]
+
   if not csv_files:
     raise FileNotFoundError(f"No CSV files found in the folder {dataset_folder}. Please check the path.")
 
@@ -798,7 +806,7 @@ if __name__ == '__main__':
 
   print(f"All results have been saved in the folder '{results_dir}'.")
 
-# todo guarda qui maps filtrare i fari e selezionare l'area di osservazione
+# todo guarda qui maps filtrare i fari
 
 
 
