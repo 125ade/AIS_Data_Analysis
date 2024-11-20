@@ -7,6 +7,7 @@ Inoltre, è stata aggiunta una legenda dei colori dei tipi di nave.
 import argparse
 import os
 import multiprocessing as mp
+from multiprocessing import Pool
 import sys
 import pandas as pd
 import numpy as np
@@ -20,6 +21,7 @@ from tqdm import tqdm
 import folium
 import json
 from branca.element import Template, MacroElement
+from collections import defaultdict
 
 ais_antenna_coords = [43.58693627326397, 13.51656777958965]  # Lat, Lon dell'antenna AIS
 
@@ -33,6 +35,8 @@ polygon_coords = [
     [14.522085391698596, 44.50473436137818],
     [13.627332698482832, 46.01607627362711]  # Punto finale chiude il poligono
 ]
+
+area_polygon = Polygon(polygon_coords)
 
 # GeoJSON del porto
 PORT_GEOJSON = {
@@ -469,7 +473,392 @@ mmsi_exclude = [
   "2386080"  # Croazia
 ]
 
-def create_unique_directory(base_path="results", prefix=f"analysis_{os.path.splitext(os.path.basename(sys.argv[0]))[0].split('_')[-1]}"):
+# Mappa dei codici MID (Maritime Identification Digits) ai nomi dei paesi
+# Fonte: International Telecommunication Union (ITU)
+MID_COUNTRY_MAP = {
+    '201': 'Albania',
+    '202': 'Andorra',
+    '203': 'Austria',
+    '204': 'Portugal',
+    '205': 'Belgium',
+    '206': 'Belarus',
+    '207': 'Bulgaria',
+    '208': 'Vatican City',
+    '209': 'Cyprus',
+    '210': 'Cyprus',
+    '211': 'Germany',
+    '212': 'Cyprus',
+    '213': 'Georgia',
+    '214': 'Moldova',
+    '215': 'Malta',
+    '216': 'Armenia',
+    '218': 'Germany',
+    '219': 'Denmark',
+    '220': 'Denmark',
+    '224': 'Spain',
+    '225': 'Spain',
+    '226': 'France',
+    '227': 'France',
+    '228': 'France',
+    '229': 'Malta',
+    '230': 'Finland',
+    '231': 'Faeroe Islands',
+    '232': 'United Kingdom',
+    '233': 'United Kingdom',
+    '234': 'United Kingdom',
+    '235': 'United Kingdom',
+    '236': 'Gibraltar',
+    '237': 'Greece',
+    '238': 'Croatia',
+    '239': 'Greece',
+    '240': 'Greece',
+    '241': 'Greece',
+    '242': 'Morocco',
+    '243': 'Hungary',
+    '244': 'Netherlands',
+    '245': 'Netherlands',
+    '246': 'Netherlands',
+    '247': 'Italy',
+    '248': 'Malta',
+    '249': 'Malta',
+    '250': 'Ireland',
+    '251': 'Iceland',
+    '252': 'Liechtenstein',
+    '253': 'Luxembourg',
+    '254': 'Monaco',
+    '255': 'Portugal',
+    '256': 'Malta',
+    '257': 'Norway',
+    '258': 'Norway',
+    '259': 'Norway',
+    '261': 'Poland',
+    '262': 'Montenegro',
+    '263': 'Portugal',
+    '264': 'Romania',
+    '265': 'Sweden',
+    '266': 'Sweden',
+    '267': 'Slovakia',
+    '268': 'San Marino',
+    '269': 'Switzerland',
+    '270': 'Czech Republic',
+    '271': 'Turkey',
+    '272': 'Ukraine',
+    '273': 'Russia',
+    '274': 'Macedonia',
+    '275': 'Latvia',
+    '276': 'Estonia',
+    '277': 'Lithuania',
+    '278': 'Slovenia',
+    '279': 'Serbia',
+    '301': 'Anguilla',
+    '303': 'Alaska (USA)',
+    '304': 'Antigua and Barbuda',
+    '305': 'Antigua and Barbuda',
+    '306': 'Curaçao',
+    '307': 'Aruba',
+    '308': 'Bahamas',
+    '309': 'Bahamas',
+    '310': 'Bermuda',
+    '311': 'Bahamas',
+    '312': 'Belize',
+    '314': 'Barbados',
+    '316': 'Canada',
+    '319': 'Cayman Islands',
+    '321': 'Costa Rica',
+    '323': 'Cuba',
+    '325': 'Dominica',
+    '327': 'Dominican Republic',
+    '329': 'Guadeloupe',
+    '330': 'Grenada',
+    '331': 'Greenland',
+    '332': 'Guatemala',
+    '334': 'Honduras',
+    '336': 'Haiti',
+    '338': 'USA',
+    '339': 'Jamaica',
+    '341': 'Saint Kitts and Nevis',
+    '343': 'Saint Lucia',
+    '345': 'Mexico',
+    '347': 'Martinique',
+    '348': 'Montserrat',
+    '350': 'Nicaragua',
+    '351': 'Panama',
+    '352': 'Panama',
+    '353': 'Panama',
+    '354': 'Panama',
+    '355': 'Panama',
+    '356': 'Panama',
+    '357': 'Panama',
+    '358': 'Puerto Rico',
+    '359': 'El Salvador',
+    '361': 'Saint Pierre and Miquelon',
+    '362': 'Trinidad and Tobago',
+    '364': 'Turks and Caicos Islands',
+    '366': 'USA',
+    '367': 'USA',
+    '368': 'USA',
+    '369': 'USA',
+    '370': 'Panama',
+    '371': 'Panama',
+    '372': 'Panama',
+    '373': 'Panama',
+    '375': 'Saint Vincent and the Grenadines',
+    '376': 'Saint Vincent and the Grenadines',
+    '377': 'Saint Vincent and the Grenadines',
+    '378': 'British Virgin Islands',
+    '379': 'U.S. Virgin Islands',
+    '401': 'Afghanistan',
+    '403': 'Saudi Arabia',
+    '405': 'Bangladesh',
+    '408': 'Bahrain',
+    '410': 'Bhutan',
+    '412': 'China',
+    '413': 'China',
+    '414': 'China',
+    '416': 'Taiwan',
+    '417': 'Sri Lanka',
+    '419': 'India',
+    '422': 'Iran',
+    '423': 'Azerbaijan',
+    '425': 'Iraq',
+    '428': 'Israel',
+    '431': 'Japan',
+    '432': 'Japan',
+    '434': 'Turkmenistan',
+    '436': 'Kazakhstan',
+    '437': 'Uzbekistan',
+    '438': 'Jordan',
+    '440': 'South Korea',
+    '441': 'South Korea',
+    '443': 'Palestine',
+    '445': 'Democratic People\'s Republic of Korea',
+    '447': 'Kuwait',
+    '450': 'Lebanon',
+    '451': 'Kyrgyzstan',
+    '453': 'Macao',
+    '455': 'Maldives',
+    '457': 'Mongolia',
+    '459': 'Nepal',
+    '461': 'Oman',
+    '463': 'Pakistan',
+    '466': 'Qatar',
+    '467': 'Syria',
+    '470': 'United Arab Emirates',
+    '472': 'Tajikistan',
+    '473': 'Yemen',
+    '475': 'Yemen',
+    '477': 'Hong Kong',
+    '478': 'Bosnia and Herzegovina',
+    '501': 'Adelie Land',
+    '503': 'Australia',
+    '506': 'Myanmar',
+    '508': 'Brunei Darussalam',
+    '510': 'Micronesia',
+    '511': 'Palau',
+    '512': 'New Zealand',
+    '514': 'Cambodia',
+    '515': 'Cambodia',
+    '516': 'Christmas Island',
+    '518': 'Cook Islands',
+    '520': 'Fiji',
+    '523': 'Cocos (Keeling) Islands',
+    '525': 'Indonesia',
+    '529': 'Kiribati',
+    '531': 'Laos',
+    '533': 'Malaysia',
+    '536': 'Northern Mariana Islands',
+    '538': 'Marshall Islands',
+    '540': 'New Caledonia',
+    '542': 'Niue',
+    '544': 'Nauru',
+    '546': 'French Polynesia',
+    '548': 'Philippines',
+    '553': 'Papua New Guinea',
+    '555': 'Pitcairn Island',
+    '557': 'Solomon Islands',
+    '559': 'American Samoa',
+    '561': 'Samoa',
+    '563': 'Singapore',
+    '564': 'Singapore',
+    '565': 'Singapore',
+    '566': 'Thailand',
+    '567': 'Thailand',
+    '570': 'Tonga',
+    '572': 'Tuvalu',
+    '574': 'Vietnam',
+    '576': 'Vanuatu',
+    '577': 'Vanuatu',
+    '578': 'Wallis and Futuna Islands',
+    '601': 'South Africa',
+    '603': 'Angola',
+    '605': 'Algeria',
+    '607': 'Saint Paul and Amsterdam Islands',
+    '608': 'Ascension Island',
+    '609': 'Burundi',
+    '610': 'Benin',
+    '611': 'Botswana',
+    '612': 'Central African Republic',
+    '613': 'Cameroon',
+    '615': 'Congo',
+    '616': 'Comoros',
+    '617': 'Cape Verde',
+    '618': 'Crozet Archipelago',
+    '619': 'Côte d\'Ivoire',
+    '620': 'Comoros',
+    '621': 'Djibouti',
+    '622': 'Egypt',
+    '624': 'Ethiopia',
+    '625': 'Eritrea',
+    '626': 'Gabon',
+    '627': 'Ghana',
+    '629': 'Gambia',
+    '630': 'Guinea-Bissau',
+    '631': 'Equatorial Guinea',
+    '632': 'Guinea',
+    '633': 'Burkina Faso',
+    '634': 'Kenya',
+    '635': 'Kerguelen Islands',
+    '636': 'Liberia',
+    '637': 'Liberia',
+    '638': 'South Sudan',
+    '642': 'Libya',
+    '644': 'Lesotho',
+    '645': 'Mauritius',
+    '647': 'Madagascar',
+    '649': 'Mali',
+    '650': 'Mozambique',
+    '654': 'Mauritania',
+    '655': 'Malawi',
+    '656': 'Niger',
+    '657': 'Nigeria',
+    '659': 'Namibia',
+    '660': 'Reunion',
+    '661': 'Rwanda',
+    '662': 'Sudan',
+    '663': 'Senegal',
+    '664': 'Seychelles',
+    '665': 'Saint Helena',
+    '666': 'Somalia',
+    '667': 'Sierra Leone',
+    '668': 'São Tomé and Príncipe',
+    '669': 'Swaziland',
+    '670': 'Chad',
+    '671': 'Togolese Republic',
+    '672': 'Tunisia',
+    '674': 'Tanzania',
+    '675': 'Uganda',
+    '676': 'Democratic Republic of the Congo',
+    '677': 'Tanzania',
+    '678': 'Zambia',
+    '679': 'Zimbabwe',
+    '701': 'Argentina',
+    '710': 'Brazil',
+    '720': 'Bolivia',
+    '725': 'Chile',
+    '730': 'Colombia',
+    '735': 'Ecuador',
+    '740': 'Falkland Islands',
+    '745': 'Guiana',
+    '750': 'Guyana',
+    '755': 'Paraguay',
+    '760': 'Peru',
+    '765': 'Suriname',
+    '770': 'Uruguay',
+    '775': 'Venezuela',
+    '802': 'United States',
+    '901': 'Maritime Mobile Service Identities',
+    '902': 'Maritime Mobile Service Identities',
+    '903': 'Maritime Mobile Service Identities',
+    '904': 'Maritime Mobile Service Identities',
+    '905': 'Maritime Mobile Service Identities',
+    '906': 'Maritime Mobile Service Identities',
+    '907': 'Maritime Mobile Service Identities',
+    '908': 'Maritime Mobile Service Identities',
+    '909': 'Maritime Mobile Service Identities',
+    '910': 'Maritime Mobile Service Identities',
+    '911': 'Maritime Mobile Service Identities',
+    '912': 'Maritime Mobile Service Identities',
+    '913': 'Maritime Mobile Service Identities',
+    '914': 'Maritime Mobile Service Identities',
+    '915': 'Maritime Mobile Service Identities',
+    '916': 'Maritime Mobile Service Identities',
+    '917': 'Maritime Mobile Service Identities',
+    '918': 'Maritime Mobile Service Identities',
+    '919': 'Maritime Mobile Service Identities',
+    '920': 'Maritime Mobile Service Identities',
+    '921': 'Maritime Mobile Service Identities',
+    '922': 'Maritime Mobile Service Identities',
+    '923': 'Maritime Mobile Service Identities',
+    '924': 'Maritime Mobile Service Identities',
+    '925': 'Maritime Mobile Service Identities',
+    '926': 'Maritime Mobile Service Identities',
+    '927': 'Maritime Mobile Service Identities',
+    '928': 'Maritime Mobile Service Identities',
+    '929': 'Maritime Mobile Service Identities',
+    '930': 'Maritime Mobile Service Identities',
+    '931': 'Maritime Mobile Service Identities',
+    '932': 'Maritime Mobile Service Identities',
+    '933': 'Maritime Mobile Service Identities',
+    '934': 'Maritime Mobile Service Identities',
+    '935': 'Maritime Mobile Service Identities',
+    '936': 'Maritime Mobile Service Identities',
+    '937': 'Maritime Mobile Service Identities',
+    '938': 'Maritime Mobile Service Identities',
+    '939': 'Maritime Mobile Service Identities',
+    '940': 'Maritime Mobile Service Identities',
+    '941': 'Maritime Mobile Service Identities',
+    '942': 'Maritime Mobile Service Identities',
+    '943': 'Maritime Mobile Service Identities',
+    '944': 'Maritime Mobile Service Identities',
+    '945': 'Maritime Mobile Service Identities',
+    '946': 'Maritime Mobile Service Identities',
+    '947': 'Maritime Mobile Service Identities',
+    '948': 'Maritime Mobile Service Identities',
+    '949': 'Maritime Mobile Service Identities',
+    '950': 'Global Maritime Distress and Safety System',
+    '970': 'AIS AtoN',
+    '972': 'AIS SART',
+    '974': 'AIS MOB',
+    '976': 'AIS EPIRB',
+    '99': 'Unknown',
+    # Puoi aggiungere altri codici MID se necessario
+}
+
+# Inizializza le strutture dati per l'analisi
+unique_mmsi_per_year = defaultdict(set)
+unique_mmsi_total = set()
+
+ship_types_per_year = defaultdict(lambda: defaultdict(int))
+ship_types_total = defaultdict(int)
+
+positions_per_year = defaultdict(list)
+positions_total = []
+
+distance_data_list = []
+
+ship_origin_per_year = defaultdict(lambda: defaultdict(int))
+ship_origin_total = defaultdict(int)
+
+ais_stations = []
+ais_stations_set = set()
+
+antenna_location = ais_antenna_coords
+
+
+# Funzioni aggiuntive
+def get_mid(mmsi):
+    return str(mmsi)[:3]
+
+
+def is_ais_station(mmsi):
+    mmsi_str = str(mmsi)
+    return mmsi_str.startswith('00') or mmsi_str.startswith('99')
+
+
+def create_unique_directory(
+        base_path="results",
+        prefix=f"analysis_{os.path.splitext(os.path.basename(sys.argv[0]))[0].split('_')[-1]}"
+):
   """Crea una directory unica per salvare i risultati."""
   if not os.path.exists(base_path):
     os.makedirs(base_path)
@@ -590,7 +979,7 @@ def plot_distance_distribution(data, results_dir, year):
     plt.ylim(0.9, None)
     plt.xlim(0, None)
     # Ottieni e aggiorna direttamente le etichette sull'asse x
-    plt.xticks(ticks=plt.xticks()[0], labels=[f'{x / 1000}' for x in plt.xticks()[0]])
+    plt.xticks(ticks=plt.xticks()[0], labels=[f'{x / 1000:.0f}' for x in plt.xticks()[0]])
     plt.tight_layout()
     plt.savefig(os.path.join(results_dir, f'distance_distribution_{year}.png'))
     plt.close()
@@ -795,6 +1184,16 @@ def generate_daily_maps_for_year(data, year_dir, year):
     m.save(map_path)
 
 
+def filter_by_polygon(chunk):
+  return chunk[chunk.apply(lambda row: area_polygon.contains(Point(row['Longitude'], row['Latitude'])), axis=1)]
+
+
+def filter_by_mmsi(chunk):
+  chunk = chunk[~chunk['MMSI'].astype(str).str.startswith(tuple(excluded_prefixes))]
+  chunk = chunk[~chunk['MMSI'].astype(str).isin(mmsi_exclude)]
+  return chunk
+
+
 if __name__ == '__main__':
   parser = argparse.ArgumentParser(description="analysis AIS Dataset")
   parser.add_argument('-nm', '--no-maps', action='store_true',
@@ -848,32 +1247,35 @@ if __name__ == '__main__':
   data['Type'] = data['Type'].astype('category')
 
   # Filtraggio dei valori di Longitude e Latitude cioè selezione area di interesse
-  area_polygon = Polygon(polygon_coords)
 
   print(f"Rows of the dataset: {len(data)}")
 
   # Filtraggio dei dati per verificare se i punti sono dentro il poligono
-  print("Filtering data by polygon area...")
 
-  # Verifica riga per riga
-  data = data[data.apply(lambda row: area_polygon.contains(Point(row['Longitude'], row['Latitude'])), axis=1)]
+  print("Filtering by Area of Focus...")
 
-  print(f"Remaining rows after filtering by Longitude and Latitude area of focus: {len(data)}")
+  num_processes = mp.cpu_count()
+  data_indices = np.array_split(data.index, num_processes)
+  data_chunks = [data.loc[idx] for idx in data_indices]
+
+  with mp.Pool(processes=num_processes) as pool:
+    filtered_chunks = list(
+      tqdm(pool.imap(filter_by_polygon, data_chunks), total=num_processes, desc="Filtering by Area of Focus")
+    )
+
+  print("Filtering by MMSI ...")
+
+  with mp.Pool(processes=num_processes) as pool:
+    final_filtered_chunks = list(
+      tqdm(pool.imap(filter_by_mmsi, filtered_chunks), total=num_processes, desc="Filtering by MMSI")
+    )
+
+  data = pd.concat(final_filtered_chunks, ignore_index=True)
+
+  print(f"Remaining rows after filtering the dataset: {len(data)}")
 
   # Ottieni la lista degli anni presenti nei dati
   years = sorted(data['year'].unique())
-
-  print("Filtering data by MMSI...")
-
-  # Escludi righe con MMSI che iniziano AtoN Reale e Sintetico 992471, AtoN Virtuale 992476, AtoN Virtuale 992478 ecc.
-  data = data[~data['MMSI'].astype(str).str.startswith(tuple(excluded_prefixes))]
-
-  print(f"Remaining rows after filtering MMSI starting with excluded MMSI code: {len(data)}")
-
-  # Filtro per escludere MMSI specificati
-  data = data[~data['MMSI'].astype(str).isin(mmsi_exclude)]
-
-  print(f"Remaining rows after excluding specified MMSI: {len(data)}")
 
   # Prepara i dati per ogni anno
   year_data_list = []
