@@ -468,12 +468,13 @@ def load_csv(file):
 
 def process_year_data(year_data_tuple):
   """Processa i dati per un anno specifico: genera grafici e mappe interattive."""
-  year, data, results_dir, no_maps = year_data_tuple
+  year, data, results_dir, no_maps, no_plots = year_data_tuple
   year_dir = os.path.join(results_dir, str(year))
   os.makedirs(year_dir, exist_ok=True)
 
   # Genera grafici per l'anno
-  generate_yearly_plots(data, year_dir, year)
+  if not no_plots:
+    generate_yearly_plots(data, year_dir, year)
 
   # Genera mappe interattive giornaliere solo se no_maps è False
   if not no_maps:
@@ -741,14 +742,18 @@ if __name__ == '__main__':
   parser = argparse.ArgumentParser(description="analysis AIS Dataset")
   parser.add_argument('-nm', '--no-maps', action='store_true',
                       help="Disables the creation of maps during processing.")
+  parser.add_argument('-np', '--no-plots', action='store_true',
+                      help="Disables the creation of plots during processing.")
   parser.add_argument('-t', '--test', action='store_true',
                       help="Get only the first file from the dataset for test porpoise for the script")
   parser.add_argument('-d', '--dataset', default=r'dataset/AIS_Dataset_csv',
                       help="Set the dataset folder")
   args = parser.parse_args()
+
   no_maps = args.no_maps
   test = args.test
   dataset = args.dataset
+  no_plots = args.no_plots
 
   mp.freeze_support()  # Necessario per Windows
   mp.set_start_method('spawn')  # Compatibilità con Windows
@@ -798,7 +803,7 @@ if __name__ == '__main__':
   year_data_list = []
   for year in years:
     year_data = data[data['year'] == year]
-    year_data_list.append((year, year_data, results_dir, no_maps))
+    year_data_list.append((year, year_data, results_dir, no_maps, no_plots))
 
   print("Processing data for each year in parallel...")
   with mp.Pool(processes=min(len(years), mp.cpu_count())) as pool:
