@@ -23,15 +23,6 @@ from branca.element import Template, MacroElement
 
 ais_antenna_coords = [43.58693627326397, 13.51656777958965]  # Lat, Lon dell'antenna AIS
 
-# Definizione del poligono dal GeoJSON AREA DI INTERESSE di prova
-# polygon_coords = [
-#     [14, 42],
-#     [15, 44],
-#     [12, 46],
-#     [12, 44],
-#     [14, 42]
-# ]
-
 polygon_coords = [
     [13.627332698482832, 46.01607627362711], # Punto iniziale del poligono
     [11.827331194451205, 45.56839707274841],
@@ -444,6 +435,39 @@ PORT_GEOJSON = {
   ]
 }
 
+excluded_prefixes = [
+  # Italia
+  "992471",  # AtoN fisici
+  "992476",  # AtoN virtuali
+  "992478",  # AtoN mobili
+  # Croazia
+  "992381",  # AtoN fisici
+  "992386",  # AtoN virtuali
+  "992388",  # AtoN mobili
+  # Slovenia
+  "992781",  # AtoN fisici
+  "992786",  # AtoN virtuali
+  "992788",  # AtoN mobili
+]
+
+# Lista degli MMSI da escludere sono antenne che per qualche motivo precedentemente non sono state escluse
+mmsi_exclude = [
+  "2470017",  # Italia
+  "2470018",  # Italia
+  "992467018",  # Italia
+  "2470059",  # Italia
+  "2470058",  # Italia
+  "2470020",  # Italia
+  "2780202",  # Slovenia
+  "2386240",  # Croazia
+  "2386300",  # Croazia
+  "2386010",  # Croazia
+  "2386020",  # Croazia
+  "2386260",  # Croazia
+  "2386190",  # Croazia
+  "2386030",  # Croazia
+  "2386080"  # Croazia
+]
 
 def create_unique_directory(base_path="results", prefix=f"analysis_{os.path.splitext(os.path.basename(sys.argv[0]))[0].split('_')[-1]}"):
   """Crea una directory unica per salvare i risultati."""
@@ -510,6 +534,7 @@ def plot_longitude_distribution(data, results_dir, year):
     plt.xlabel('Longitude')
     plt.yscale('log')
     plt.ylabel('Count (Log)')
+    plt.ylim(0.9, None)
     plt.tight_layout()
     plt.savefig(os.path.join(results_dir, f'Longitude_distribution_{year}.png'))
     plt.close()
@@ -526,6 +551,7 @@ def plot_latitude_distribution(data, results_dir, year):
     plt.xlabel('Latitude')
     plt.yscale('log')
     plt.ylabel('Count (Log)')
+    plt.ylim(0.9, None)
     plt.tight_layout()
     plt.savefig(os.path.join(results_dir, f'Latitude_distribution_{year}.png'))
     plt.close()
@@ -544,6 +570,7 @@ def plot_vessel_type_distribution(data, results_dir, year):
     plt.xlabel('Vessel Type')
     plt.yscale('log')
     plt.ylabel('Count each MMSI only once (Log)')
+    plt.ylim(0.9, None)
     plt.tight_layout()
     plt.savefig(os.path.join(results_dir, f'vessel_type_distribution_{year}.png'))
     plt.close()
@@ -557,9 +584,13 @@ def plot_distance_distribution(data, results_dir, year):
     plt.figure(figsize=(10, 6))
     sns.histplot(data['Distance'], bins=1000, kde=True)
     plt.title(f'Distribution of Distances for the Year {year}')
-    plt.xlabel('Distance')
+    plt.xlabel('Distance (Km)')
     plt.yscale('log')
     plt.ylabel('Count (Log)')
+    plt.ylim(0.9, None)
+    plt.xlim(0, None)
+    # Ottieni e aggiorna direttamente le etichette sull'asse x
+    plt.xticks(ticks=plt.xticks()[0], labels=[f'{x / 1000}' for x in plt.xticks()[0]])
     plt.tight_layout()
     plt.savefig(os.path.join(results_dir, f'distance_distribution_{year}.png'))
     plt.close()
@@ -576,6 +607,8 @@ def plot_bearing_distribution(data, results_dir, year):
     plt.xlabel('Bearing')
     plt.yscale('log')
     plt.ylabel('Count (Log)')
+    plt.xticks(np.arange(0, 361, 20))
+    plt.ylim(0.9, None)
     plt.tight_layout()
     plt.savefig(os.path.join(results_dir, f'bearing_distribution_{year}.png'))
     plt.close()
@@ -656,6 +689,30 @@ def generate_daily_maps_for_year(data, year_dir, year):
 
     # Crea la mappa
     m = folium.Map(location=ais_antenna_coords, zoom_start=13)
+
+    # Aggiungi il poligono di selezione dell'area di interesse
+    geojson_aof = {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [polygon_coords]  # Le coordinate devono essere in una lista esterna
+      },
+      "properties": {
+        "name": "Area of Focus"  # Puoi aggiungere altre proprietà qui
+      }
+    }
+
+    geom = shape(geojson_aof['geometry'])
+    name = geojson_aof['properties']['name']
+    folium.GeoJson(
+      geom,
+      name=name,
+      style_function=lambda x: {
+        "fill": False,
+        "color": "red",
+        "weight": 2,
+      },
+    ).add_to(m)
 
     # Aggiungi poligoni del porto
     for feature in PORT_GEOJSON['features']:
@@ -746,12 +803,15 @@ if __name__ == '__main__':
                       help="Disables the creation of plots during processing.")
   parser.add_argument('-t', '--test', action='store_true',
                       help="Get only the first file from the dataset for test porpoise for the script")
+  parser.add_argument('-tx', '--test-extended', action='store_true',
+                      help="Used for test porpoise for the script with larger dataset get the first 10 files")
   parser.add_argument('-d', '--dataset', default=r'dataset/AIS_Dataset_csv',
                       help="Set the dataset folder")
   args = parser.parse_args()
 
   no_maps = args.no_maps
   test = args.test
+  test_extended = args.test_extended
   dataset = args.dataset
   no_plots = args.no_plots
 
@@ -762,8 +822,12 @@ if __name__ == '__main__':
 
   dataset_folder =dataset
   csv_files = [os.path.join(dataset_folder, f) for f in os.listdir(dataset_folder) if f.endswith('.csv')]
+
   if test:
     csv_files = csv_files[:1]
+
+  if test_extended:
+    csv_files = csv_files[:10]
 
   if not csv_files:
     raise FileNotFoundError(f"No CSV files found in the folder {dataset_folder}. Please check the path.")
@@ -786,18 +850,30 @@ if __name__ == '__main__':
   # Filtraggio dei valori di Longitude e Latitude cioè selezione area di interesse
   area_polygon = Polygon(polygon_coords)
 
+  print(f"Rows of the dataset: {len(data)}")
+
   # Filtraggio dei dati per verificare se i punti sono dentro il poligono
   print("Filtering data by polygon area...")
-  initial_row_count = len(data)
 
   # Verifica riga per riga
   data = data[data.apply(lambda row: area_polygon.contains(Point(row['Longitude'], row['Latitude'])), axis=1)]
 
-  filtered_row_count = len(data)
-  print(f"Filtered out {initial_row_count - filtered_row_count} rows based on polygon constraints.")
+  print(f"Remaining rows after filtering by Longitude and Latitude area of focus: {len(data)}")
 
   # Ottieni la lista degli anni presenti nei dati
   years = sorted(data['year'].unique())
+
+  print("Filtering data by MMSI...")
+
+  # Escludi righe con MMSI che iniziano AtoN Reale e Sintetico 992471, AtoN Virtuale 992476, AtoN Virtuale 992478 ecc.
+  data = data[~data['MMSI'].astype(str).str.startswith(tuple(excluded_prefixes))]
+
+  print(f"Remaining rows after filtering MMSI starting with excluded MMSI code: {len(data)}")
+
+  # Filtro per escludere MMSI specificati
+  data = data[~data['MMSI'].astype(str).isin(mmsi_exclude)]
+
+  print(f"Remaining rows after excluding specified MMSI: {len(data)}")
 
   # Prepara i dati per ogni anno
   year_data_list = []
@@ -810,29 +886,3 @@ if __name__ == '__main__':
     pool.map(process_year_data, year_data_list)
 
   print(f"All results have been saved in the folder '{results_dir}'.")
-
-# todo guarda qui maps filtrare i fari
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
