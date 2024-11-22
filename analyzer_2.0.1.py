@@ -881,7 +881,7 @@ def load_csv(file):
 
 def process_year_data(year_data_tuple):
   """Processa i dati per un anno specifico: genera grafici e mappe interattive."""
-  year, data, results_dir, no_maps, no_plots = year_data_tuple
+  year, data, results_dir, no_maps, no_plots, no_stat = year_data_tuple
   year_dir = os.path.join(results_dir, str(year))
   os.makedirs(year_dir, exist_ok=True)
 
@@ -892,6 +892,11 @@ def process_year_data(year_data_tuple):
   # Genera mappe interattive giornaliere solo se no_maps è False
   if not no_maps:
     generate_daily_maps_for_year(data, year_dir, year)
+
+  if not no_stat:
+    statistiche_year = data.describe()
+    output_statistiche_path = os.path.join(year_dir, f'stats_{year}.csv')
+    statistiche_year.to_csv(output_statistiche_path)
 
 
 def generate_yearly_plots(data, year_dir, year):
@@ -1030,7 +1035,7 @@ def plot_polar_bearing_distribution(data, results_dir, year):
     ax.set_title(f'Distribution of Bearings for the Year {year}', va='bottom', fontsize=14)
 
     # Salvataggio del grafico
-    radial_plot_path = os.path.join(results_dir, "bearing_radial_distribution.png")
+    radial_plot_path = os.path.join(results_dir, f"bearing_radial_distribution_{year}.png")
     plt.savefig(radial_plot_path)
     plt.close()
   else:
@@ -1201,6 +1206,8 @@ if __name__ == '__main__':
                       help="Disables the creation of maps during processing.")
   parser.add_argument('-np', '--no-plots', action='store_true',
                       help="Disables the creation of plots during processing.")
+  parser.add_argument('-ns', '--no-stat', action='store_true',
+                      help="Disables the creation of the statistics.")
   parser.add_argument('-t', '--test', action='store_true',
                       help="Get only the first file from the dataset for test porpoise for the script")
   parser.add_argument('-tx', '--test-extended', action='store_true',
@@ -1214,6 +1221,7 @@ if __name__ == '__main__':
   test_extended = args.test_extended
   dataset = args.dataset
   no_plots = args.no_plots
+  no_stat = args.no_stat
 
   mp.freeze_support()  # Necessario per Windows
   mp.set_start_method('spawn')  # Compatibilità con Windows
@@ -1281,6 +1289,13 @@ if __name__ == '__main__':
 
   print(f"Remaining rows after filtering the dataset: {len(data)}")
 
+  if not no_stat:
+    print("Generating Global statistics ...")
+    statistiche = data.describe()
+    output_path = os.path.join(results_dir, 'stats_general.csv')
+    statistiche.to_csv(output_path)
+    print(f"Saved statistics in {output_path}")
+
   # Ottieni la lista degli anni presenti nei dati
   years = sorted(data['year'].unique())
 
@@ -1288,7 +1303,7 @@ if __name__ == '__main__':
   year_data_list = []
   for year in years:
     year_data = data[data['year'] == year]
-    year_data_list.append((year, year_data, results_dir, no_maps, no_plots))
+    year_data_list.append((year, year_data, results_dir, no_maps, no_plots, no_stat))
 
   print("Processing data for each year in parallel...")
   with mp.Pool(processes=min(len(years), mp.cpu_count())) as pool:
