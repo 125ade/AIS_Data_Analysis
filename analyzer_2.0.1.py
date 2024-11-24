@@ -881,7 +881,7 @@ def load_csv(file):
 
 def process_year_data(year_data_tuple):
   """Processa i dati per un anno specifico: genera grafici e mappe interattive."""
-  year, data, results_dir, no_maps, no_plots, no_stat = year_data_tuple
+  year, data, results_dir, no_maps, no_plots, no_stat, no_corr = year_data_tuple
   year_dir = os.path.join(results_dir, str(year))
   os.makedirs(year_dir, exist_ok=True)
 
@@ -897,6 +897,14 @@ def process_year_data(year_data_tuple):
     statistiche_year = data.describe()
     output_statistiche_path = os.path.join(year_dir, f'stats_{year}.csv')
     statistiche_year.to_csv(output_statistiche_path)
+
+  if not no_corr:
+    numeric_data = data.select_dtypes(include=['number']).drop(columns=['year', 'MMSI', 'id', 'hour'], errors='ignore')
+    correlation_matrix = numeric_data.corr()
+    plt.figure(figsize=(10, 6))
+    sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', fmt=".2f")
+    output_corr_path = os.path.join(year_dir, f'correlation_matrix_{year}.png')
+    plt.savefig(output_corr_path, dpi=300, bbox_inches='tight')
 
 
 def generate_yearly_plots(data, year_dir, year):
@@ -1208,6 +1216,8 @@ if __name__ == '__main__':
                       help="Disables the creation of plots during processing.")
   parser.add_argument('-ns', '--no-stat', action='store_true',
                       help="Disables the creation of the statistics.")
+  parser.add_argument('-nc', '--no-corr', action='store_true',
+                      help="Disables the creation of the Matrix of Correlation.")
   parser.add_argument('-t', '--test', action='store_true',
                       help="Get only the first file from the dataset for test porpoise for the script")
   parser.add_argument('-tx', '--test-extended', action='store_true',
@@ -1222,6 +1232,8 @@ if __name__ == '__main__':
   dataset = args.dataset
   no_plots = args.no_plots
   no_stat = args.no_stat
+
+  no_corr = args.no_corr
 
   mp.freeze_support()  # Necessario per Windows
   mp.set_start_method('spawn')  # Compatibilità con Windows
@@ -1303,7 +1315,7 @@ if __name__ == '__main__':
   year_data_list = []
   for year in years:
     year_data = data[data['year'] == year]
-    year_data_list.append((year, year_data, results_dir, no_maps, no_plots, no_stat))
+    year_data_list.append((year, year_data, results_dir, no_maps, no_plots, no_stat, no_stat))
 
   print("Processing data for each year in parallel...")
   with mp.Pool(processes=min(len(years), mp.cpu_count())) as pool:
