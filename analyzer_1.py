@@ -72,21 +72,17 @@ def plot_delta_t_variance(tracks_directory, save_path):
 
     # Lista dei fattori di conversione e delle unità con tutte le soglie richieste
     time_units = [
-        ('secondi', 1,
+        ('seconds', 1,
          [300, 600, 1200, 1800, 3600, 7200, 10800, 21600, 43200, 86400, 172800, 604800, 2592000],
-         ['5 min', '10 min', '20 min', '30 min', '1 ora', '2 ore', '3 ore', '6 ore', '12 ore', '1 giorno', '2 giorni',
-          '1 settimana', '1 mese'],
-         ['red', 'green', 'blue', 'purple', 'orange', 'cyan', 'magenta', 'brown', 'grey', 'black', 'pink', 'lightblue',
-          'teal']),
-        ('minuti', 60,
+         ['5 min', '10 min', '20 min', '30 min', '1 hour', '2 hours', '3 hours', '6 hours', '12 hours', '1 day', '2 days', '1 week', '1 month'],
+         ['red', 'green', 'blue', 'purple', 'orange', 'cyan', 'magenta', 'brown', 'grey', 'black', 'pink', 'lightblue', 'teal']),
+        ('minutes', 60,
          [5, 10, 20, 30, 60, 120, 180, 360, 720, 1440, 2880, 10080, 43200],
-         ['5 min', '10 min', '20 min', '30 min', '1 ora', '2 ore', '3 ore', '6 ore', '12 ore', '1 giorno', '2 giorni',
-          '1 settimana', '1 mese'],
-         ['red', 'green', 'blue', 'purple', 'orange', 'cyan', 'magenta', 'brown', 'grey', 'black', 'pink', 'lightblue',
-          'teal']),
-        ('ore', 3600,
+         ['5 min', '10 min', '20 min', '30 min', '1 hour', '2 hours', '3 hours', '6 hours', '12 hours', '1 day', '2 days', '1 week', '1 month'],
+         ['red', 'green', 'blue', 'purple', 'orange', 'cyan', 'magenta', 'brown', 'grey', 'black', 'pink', 'lightblue', 'teal']),
+        ('hours', 3600,
          [1, 2, 3, 6, 12, 24, 48, 168, 720],
-         ['1 ora', '2 ore', '3 ore', '6 ore', '12 ore', '1 giorno', '2 giorni', '1 settimana', '1 mese'],
+         ['1 hour', '2 hours', '3 hours', '6 hours', '12 hours', '1 day', '2 days', '1 week', '1 month'],
          ['red', 'green', 'blue', 'purple', 'orange', 'cyan', 'magenta', 'brown', 'grey'])
     ]
 
@@ -106,9 +102,9 @@ def plot_delta_t_variance(tracks_directory, save_path):
             s=50
         )
         plt.xscale('log')  # Imposta la scala logaritmica sull'asse x
-        plt.xlabel(f"Delta T Medio tra rilevazioni ({unit_name}) [Scala Log]")
-        plt.ylabel("Varianza del Delta T (s^2)")
-        plt.title(f"Varianza del Delta T vs Delta T Medio tra rilevazioni ({unit_name})")
+        plt.xlabel(f"Average Delta T between measurements ({unit_name}) [Log Scale]")
+        plt.ylabel("Variance of Delta T (s^2)")
+        plt.title(f"Variance of Delta T vs Average Delta T between measurements ({unit_name})")
         plt.grid(True, which="both", ls="--", linewidth=0.5)
 
         # Inizializza una lista per gli elementi della legenda
@@ -135,7 +131,7 @@ def plot_delta_t_variance(tracks_directory, save_path):
 
         # Crea la legenda personalizzata
         handles, labels = zip(*legend_elements)
-        plt.legend(handles, labels, title="Soglie", bbox_to_anchor=(1.05, 1), loc='upper left')
+        plt.legend(handles, labels, title="Thresholds", bbox_to_anchor=(1.05, 1), loc='upper left')
 
         # Salva il grafico
         plt.tight_layout()
@@ -204,9 +200,9 @@ def analyze_vessel_tracks(tracks_directory, save_path):
     plt.figure(figsize=(10, 6))
     plt.bar(range(len(rows_per_file)), rows_per_file.values(), color='skyblue')
     plt.xlabel("File (MMSI)")
-    plt.ylabel("Numero di rilevazioni")
     plt.yscale("log")  # Imposta la scala logaritmica sull'asse y
-    plt.title("Distribuzione del numero di rilevazioni per file (MMSI)")
+    plt.ylabel("Number of measurements")
+    plt.title("Distribution of the number of measurements for each MMSI")
 
     # Aggiunge righe orizzontali a y=5, y=10, y=20, y=30, y=100 con i numeri affiancati e conta i file sopra ogni soglia
     thresholds = [5, 10, 20, 30, 100]
@@ -228,21 +224,21 @@ def analyze_vessel_tracks(tracks_directory, save_path):
     plt.close()
 
     # Grafico della distribuzione dei giorni della settimana
-    plt.figure(figsize=(8, 6))
+    plt.figure(figsize=(10, 6))
     pd.Series(weekdays).value_counts().sort_index().plot(kind='bar', color='salmon')
-    plt.xlabel("Giorno della settimana")
-    plt.ylabel("Numero di rilevazioni")
-    plt.title("Distribuzione dei rilevamenti per giorno della settimana")
+    plt.xlabel("Day of the week")
+    plt.ylabel("Number of measurements")
+    plt.title("Distribution of measurements by day of the week")
     plt.tight_layout()
     plt.savefig(os.path.join(save_path, "distribution_weekdays.png"))
     plt.close()
 
     # Grafico della distribuzione oraria delle rilevazioni
-    plt.figure(figsize=(8, 6))
+    plt.figure(figsize=(10, 6))
     pd.Series(hours).value_counts().sort_index().plot(kind='bar', color='lightgreen')
-    plt.xlabel("Ora del giorno")
-    plt.ylabel("Numero di rilevazioni")
-    plt.title("Distribuzione oraria delle rilevazioni")
+    plt.xlabel("Hour of the day")
+    plt.ylabel("Number of measurements")
+    plt.title("Hourly distribution of measurements")
     plt.xticks(range(0, 24))
     plt.tight_layout()
     plt.savefig(os.path.join(save_path, "distribution_hours.png"))
@@ -259,9 +255,9 @@ def analyze_vessel_tracks(tracks_directory, save_path):
         dodge=False,  # Impedisce lo spostamento dei boxplot
         showfliers=False  # Nasconde i valori anomali per una visualizzazione più pulita
     )
-    plt.xlabel("Tipologia di Barca")
-    plt.ylabel("Numero di rilevazioni")
-    plt.title("Distribuzione della Tipologia di Barca in base al Numero di Rilevazioni")
+    plt.xlabel("Type of Boat")
+    plt.ylabel("Number of measurements")
+    plt.title("Distribution of Boat Types by Number of Measurements")
     plt.yscale("log")  # Imposta la scala logaritmica sull'asse y per una migliore visualizzazione
     plt.grid(True, which="both", ls="--", linewidth=0.5)
     plt.legend(title='Boat Type', bbox_to_anchor=(1.05, 1), loc='upper left')  # Sposta la legenda fuori dal grafico
@@ -285,9 +281,9 @@ def analyze_vessel_tracks(tracks_directory, save_path):
         # Plot
         plt.figure(figsize=(8, 6))
         weekday_counts.plot(kind='bar', color='skyblue')
-        plt.xlabel("Giorno della settimana")
-        plt.ylabel("Numero di rilevazioni")
-        plt.title(f"Distribuzione dei rilevamenti per settimana {week} del {year}")
+        plt.xlabel("Day of the week")
+        plt.ylabel("Number of measurements")
+        plt.title(f"Distribution of measurements for week {week} of {year}")
         plt.tight_layout()
 
         # Salva il grafico con nome "week{week}_{month}_{year}.png"
