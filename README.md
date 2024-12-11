@@ -1,4 +1,9 @@
-# AIS Data Analysis
+<div align="center"> 
+  <img src="ais_logo.webp" alt="Logo AIS Data Analysis" width="200" height="200"/>
+</div>
+
+<h1 align="center">AIS Data Analysis</h1>
+
 
 ## Quick Start Guide
 
