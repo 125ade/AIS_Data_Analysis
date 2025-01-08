@@ -3,25 +3,15 @@ import sys
 import numpy as np
 import pandas as pd
 import matplotlib
-
-matplotlib.use('Agg')  # Usa un backend non interattivo per evitare problemi con Tcl
 import matplotlib.pyplot as plt
-
 from tqdm import tqdm
-from datetime import datetime
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
-
-from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, GRU, Dense, Dropout
-from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
-
-from prophet import Prophet
+matplotlib.use('Agg')  # Usa un backend non interattivo per evitare problemi con Tcl
 
 # >>> IMPORT PER I TEST DI STAZIONARIETÀ <<<
 from statsmodels.tsa.stattools import adfuller, kpss
@@ -207,7 +197,7 @@ def create_features_lag(df, lag=4):
 
 
 # -------------------------------------------------------------------
-# ARIMA, SARIMA, SARIMAX - param fissi
+# ARIMA, SARIMAX - param fissi
 # -------------------------------------------------------------------
 
 def train_arima(train_df, test_df, p, d, q):
@@ -222,24 +212,6 @@ def train_arima(train_df, test_df, p, d, q):
         return preds_test.values, aic, bic
     except Exception as e:
         raise ValueError(f"ARIMA({p},{d},{q}) Error: {str(e)}")
-
-
-def train_sarima(train_df, test_df, p, d, q, P, D, Q, s):
-    """Allena un SARIMA(p,d,q)(P,D,Q,s) senza grid search."""
-    tqdm.write(f"Training SARIMA({p},{d},{q})x({P},{D},{Q},{s})...")
-    try:
-        model = SARIMAX(
-            train_df['unique_ships'],
-            order=(p, d, q),
-            seasonal_order=(P, D, Q, s)
-        )
-        fit = model.fit(disp=False)
-        preds_test = fit.forecast(steps=len(test_df))
-        aic = fit.aic
-        bic = fit.bic
-        return preds_test.values, aic, bic
-    except Exception as e:
-        raise ValueError(f"SARIMA({p},{d},{q})x({P},{D},{Q},{s}) Error: {str(e)}")
 
 
 def train_sarimax(train_df, test_df, p, d, q, P, D, Q, s):
@@ -416,85 +388,10 @@ def train_random_forest_tuning(train, test, lag=4):
 
     return preds_test, aic, bic
 
-
-# -------------------------------------------------------------------
-# LSTM / GRU TUNING
-# -------------------------------------------------------------------
-
-def train_lstm_tuning(train, test, lag=4, epochs=20, batch_size=16, hidden_units=64):
-    """Allena una LSTM con parametri base + dropout e restituisce le previsioni."""
-    from sklearn.model_selection import train_test_split
-
-    combined = pd.concat([train, test], ignore_index=True)
-    combined_features = create_features_lag(combined, lag=lag)
-
-    train_cutoff = len(create_features_lag(train, lag=lag))
-    train_df = combined_features.iloc[:train_cutoff].copy()
-    test_df = combined_features.iloc[train_cutoff:].copy()
-
-    X = train_df.drop(['date', 'unique_ships'], axis=1).values
-    y = train_df['unique_ships'].values
-
-    X_train_sub, X_vali_sub, y_train_sub, y_vali_sub = train_test_split(X, y, test_size=0.2, shuffle=False)
-
-    scaler = MinMaxScaler()
-    scaler.fit(X_train_sub)
-    X_train_sub = scaler.transform(X_train_sub)
-    X_vali_sub = scaler.transform(X_vali_sub)
-
-    # Reshape per LSTM
-    X_train_sub = X_train_sub.reshape((X_train_sub.shape[0], 1, X_train_sub.shape[1]))
-    X_vali_sub = X_vali_sub.reshape((X_vali_sub.shape[0], 1, X_vali_sub.shape[1]))
-
-    model = Sequential()
-    model.add(LSTM(hidden_units, activation='relu', input_shape=(1, X_train_sub.shape[2])))
-    model.add(Dropout(0.2))
-    model.add(Dense(1))
-    model.compile(optimizer='adam', loss='mse')
-
-    es = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
-    rlr = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=2, verbose=0)
-
-    tqdm.write("Inizio addestramento LSTM (mini-vali)...")
-    model.fit(X_train_sub, y_train_sub,
-              epochs=epochs,
-              batch_size=batch_size,
-              validation_data=(X_vali_sub, y_vali_sub),
-              callbacks=[es, rlr],
-              verbose=0)
-
-    # Retrain su full train
-    X_train_full = scaler.fit_transform(train_df.drop(['date', 'unique_ships'], axis=1).values)
-    y_train_full = train_df['unique_ships'].values
-    X_test_full = scaler.transform(test_df.drop(['date', 'unique_ships'], axis=1).values)
-
-    X_train_full = X_train_full.reshape((X_train_full.shape[0], 1, X_train_full.shape[1]))
-    X_test_full = X_test_full.reshape((X_test_full.shape[0], 1, X_test_full.shape[1]))
-
-    final_model = Sequential()
-    final_model.add(LSTM(hidden_units, activation='relu', input_shape=(1, X_train_full.shape[2])))
-    final_model.add(Dropout(0.2))
-    final_model.add(Dense(1))
-    final_model.compile(optimizer='adam', loss='mse')
-
-    tqdm.write("Retrain LSTM su tutto il train...")
-    final_model.fit(X_train_full, y_train_full,
-                    epochs=epochs,
-                    batch_size=batch_size,
-                    verbose=0)
-
-    preds_test = final_model.predict(X_test_full).flatten()
-
-    # AIC/BIC non definiti
-    aic = np.nan
-    bic = np.nan
-
-    return preds_test, aic, bic
-
-
 # -------------------------------------------------------------------
 # SCRIPT PRINCIPALE
 # -------------------------------------------------------------------
+
 
 def main():
     # 1) Crea directory per salvare i risultati
@@ -612,149 +509,6 @@ def main():
         plot_prediction(train, test, rf_preds, "RandomForest_tuned", results_dir)
     except Exception as e:
         tqdm.write(f"RF Error: {str(e)}")
-
-    # Gradient Boosting
-    tqdm.write("Gradient Boosting param fissi (esempio)...")
-    try:
-        combined = pd.concat([train, test], ignore_index=True)
-        combined_feat = create_features_lag(combined, lag=4)
-
-        train_cutoff = len(create_features_lag(train, lag=4))
-        train_df = combined_feat.iloc[:train_cutoff].copy()
-        test_df = combined_feat.iloc[train_cutoff:].copy()
-
-        X_train = train_df.drop(['date', 'unique_ships'], axis=1)
-        y_train = train_df['unique_ships']
-        X_test = test_df.drop(['date', 'unique_ships'], axis=1)
-
-        X_train, X_test, sc_gb = scale_data(X_train, X_test, X_train.columns, scaler_type="minmax")
-
-        gb_model = GradientBoostingRegressor(n_estimators=200, learning_rate=0.05, random_state=42)
-        gb_model.fit(X_train, y_train)
-        gb_preds = gb_model.predict(X_test)
-
-        gb_m = evaluate_metrics(ground_truth, gb_preds)
-        gb_m["model"] = "GradientBoosting_tuned"
-        gb_m["AIC"] = np.nan
-        gb_m["BIC"] = np.nan
-        all_metrics.append(gb_m)
-        plot_prediction(train, test, gb_preds, "GradientBoosting_tuned", results_dir)
-    except Exception as e:
-        tqdm.write(f"GradientBoosting Error: {str(e)}")
-
-    # LSTM
-    tqdm.write("LSTM con param custom/tuning...")
-    try:
-        lstm_preds, lstm_aic, lstm_bic = train_lstm_tuning(train, test, lag=4, epochs=30, batch_size=16, hidden_units=64)
-        lstm_m = evaluate_metrics(ground_truth, lstm_preds)
-        lstm_m["model"] = "LSTM_tuned"
-        lstm_m["AIC"] = lstm_aic
-        lstm_m["BIC"] = lstm_bic
-        all_metrics.append(lstm_m)
-        plot_prediction(train, test, lstm_preds, "LSTM_tuned", results_dir)
-    except Exception as e:
-        tqdm.write(f"LSTM Error: {str(e)}")
-
-    # GRU
-    tqdm.write("GRU con param simili a LSTM (no grid in questo esempio)...")
-    try:
-        from sklearn.model_selection import train_test_split
-
-        lag = 4
-        combined = pd.concat([train, test], ignore_index=True)
-        combined_feat = create_features_lag(combined, lag=lag)
-        train_cutoff = len(create_features_lag(train, lag=lag))
-        train_df = combined_feat.iloc[:train_cutoff].copy()
-        test_df = combined_feat.iloc[train_cutoff:].copy()
-
-        X = train_df.drop(['date', 'unique_ships'], axis=1).values
-        y = train_df['unique_ships'].values
-        X_train_sub, X_vali_sub, y_train_sub, y_vali_sub = train_test_split(X, y, test_size=0.2, shuffle=False)
-
-        sc_gru = MinMaxScaler()
-        sc_gru.fit(X_train_sub)
-        X_train_sub = sc_gru.transform(X_train_sub)
-        X_vali_sub = sc_gru.transform(X_vali_sub)
-
-        X_train_sub = X_train_sub.reshape((X_train_sub.shape[0], 1, X_train_sub.shape[1]))
-        X_vali_sub = X_vali_sub.reshape((X_vali_sub.shape[0], 1, X_vali_sub.shape[1]))
-
-        model_gru = Sequential()
-        model_gru.add(GRU(64, activation='relu', input_shape=(1, X_train_sub.shape[2])))
-        model_gru.add(Dropout(0.2))
-        model_gru.add(Dense(1))
-        model_gru.compile(optimizer='adam', loss='mse')
-
-        es_g = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
-        rlr_g = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=2, verbose=0)
-        tqdm.write("Addestramento GRU (mini-vali)...")
-        model_gru.fit(X_train_sub, y_train_sub,
-                      epochs=30, batch_size=16,
-                      validation_data=(X_vali_sub, y_vali_sub),
-                      callbacks=[es_g, rlr_g],
-                      verbose=0)
-
-        # Retrain su full train
-        X_train_full = train_df.drop(['date', 'unique_ships'], axis=1).values
-        y_train_full = train_df['unique_ships'].values
-        X_test_full = test_df.drop(['date', 'unique_ships'], axis=1).values
-
-        sc_gru.fit(X_train_full)
-        X_train_full = sc_gru.transform(X_train_full)
-        X_test_full = sc_gru.transform(X_test_full)
-
-        X_train_full = X_train_full.reshape((X_train_full.shape[0], 1, X_train_full.shape[1]))
-        X_test_full = X_test_full.reshape((X_test_full.shape[0], 1, X_test_full.shape[1]))
-
-        tqdm.write("Retrain GRU su full train...")
-        final_gru = Sequential()
-        final_gru.add(GRU(64, activation='relu', input_shape=(1, X_train_full.shape[2])))
-        final_gru.add(Dropout(0.2))
-        final_gru.add(Dense(1))
-        final_gru.compile(optimizer='adam', loss='mse')
-
-        final_gru.fit(X_train_full, y_train_full, epochs=30, batch_size=16, verbose=0)
-
-        gru_preds = final_gru.predict(X_test_full).flatten()
-        gru_m = evaluate_metrics(ground_truth, gru_preds)
-        gru_m["model"] = "GRU_tuned"
-        gru_m["AIC"] = np.nan
-        gru_m["BIC"] = np.nan
-        all_metrics.append(gru_m)
-        plot_prediction(train, test, gru_preds, "GRU_tuned", results_dir)
-
-    except Exception as e:
-        tqdm.write(f"GRU Error: {str(e)}")
-
-    # Prophet
-    tqdm.write("Prophet con param custom (seasonality_mode=multiplicative)...")
-    try:
-        df_train = train.rename(columns={'date': 'ds', 'unique_ships': 'y'}).copy()
-        df_test = test.rename(columns={'date': 'ds', 'unique_ships': 'y'}).copy()
-
-        model_prophet = Prophet(
-            yearly_seasonality=True,
-            weekly_seasonality=True,
-            daily_seasonality=False,
-            seasonality_mode='multiplicative',
-            seasonality_prior_scale=10
-        )
-        model_prophet.fit(df_train)
-
-        future = model_prophet.make_future_dataframe(periods=len(test), freq='W')
-        forecast = model_prophet.predict(future)
-        forecast_test = forecast.tail(len(test))
-        prophet_preds = forecast_test['yhat'].values
-
-        prophet_m = evaluate_metrics(ground_truth, prophet_preds)
-        prophet_m["model"] = "Prophet_multiplicative"
-        prophet_m["AIC"] = np.nan
-        prophet_m["BIC"] = np.nan
-        all_metrics.append(prophet_m)
-        plot_prediction(train, test, prophet_preds, "Prophet_multiplicative", results_dir)
-
-    except Exception as e:
-        tqdm.write(f"Prophet Error: {str(e)}")
 
     # -------------------------------------------------------------------
     # SALVATAGGIO RISULTATI FINALI
