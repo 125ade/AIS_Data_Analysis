@@ -1,3 +1,6 @@
+"""
+Script per la classificazione delle tipologie delle navi identificate
+"""
 import pandas as pd
 import numpy as np
 import os
@@ -10,21 +13,12 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from tqdm import tqdm
 import matplotlib
-matplotlib.use('Agg')  # Usa backend non interattivo per prevenire errori legati a Tcl/Tk
-
-# Importazioni aggiuntive per i classificatori e la scalatura
 from sklearn.linear_model import LogisticRegression
-from sklearn.svm import SVC
-from sklearn.neighbors import KNeighborsClassifier
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.ensemble import (
-    RandomForestClassifier,
-    GradientBoostingClassifier,
-    AdaBoostClassifier,
-    ExtraTreesClassifier
-)
-from sklearn.neural_network import MLPClassifier
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
+matplotlib.use('Agg')
+
 
 def create_unique_directory(
         base_path="results",
@@ -42,14 +36,12 @@ def create_unique_directory(
     os.makedirs(unique_directory)
     return unique_directory
 
+
 if __name__ == '__main__':
-    # Creazione di una cartella per salvare i risultati
     output_dir = create_unique_directory()
 
     dataset_folder = "dataset/AIS_Dataset_csv_FocusArea"
     csv_files = [os.path.join(dataset_folder, f) for f in os.listdir(dataset_folder) if f.endswith('.csv')]
-
-    #csv_files = csv_files[:10]
 
     if not csv_files:
         raise FileNotFoundError(f"No CSV files found in the folder {dataset_folder}. Please check the path.")
@@ -167,7 +159,7 @@ if __name__ == '__main__':
             os.makedirs(model_output_dir)
 
         # Verifica se il modello richiede dati scalati
-        if name in ['LogisticRegression', 'SVC', 'MLPClassifier', 'KNeighbors']:
+        if name in ['LogisticRegression']:
             X_train_model = X_train_scaled
             X_test_model = X_test_scaled
         else:
