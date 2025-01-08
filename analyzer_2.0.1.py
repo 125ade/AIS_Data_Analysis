@@ -456,6 +456,7 @@ excluded_prefixes = [
 
 # Lista degli MMSI da escludere sono antenne che per qualche motivo precedentemente non sono state escluse
 mmsi_exclude = [
+  "0",
   "2470017",  # Italia
   "2470018",  # Italia
   "992467018",  # Italia
@@ -894,7 +895,7 @@ def process_year_data(year_data_tuple):
     generate_daily_maps_for_year(data, year_dir, year)
 
   if not no_stat:
-    statistiche_year = data.describe()
+    statistiche_year = data.describe(include='all')
     output_statistiche_path = os.path.join(year_dir, f'stats_{year}.csv')
     statistiche_year.to_csv(output_statistiche_path)
 
@@ -1303,7 +1304,7 @@ if __name__ == '__main__':
 
   if not no_stat:
     print("Generating Global statistics ...")
-    statistiche = data.describe()
+    statistiche = data.describe(include='all')
     output_path = os.path.join(results_dir, 'stats_general.csv')
     statistiche.to_csv(output_path)
     print(f"Saved statistics in {output_path}")
