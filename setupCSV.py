@@ -1,6 +1,10 @@
+"""
+Script che prende il dataset in formato sql e lo trasforma in file csv da 40K righe l'uno
+"""
 import os
 import csv
 from tqdm import tqdm
+
 
 def sql_to_csv_chunks(sql_file_path, csv_output_dir, year, chunk_size=40000):
     # Controlla se il file SQL esiste
@@ -80,6 +84,7 @@ def sql_to_csv_chunks(sql_file_path, csv_output_dir, year, chunk_size=40000):
         csv_file.close()
 
     print(f"Conversione completata. Sono stati creati {file_count - 1} file CSV in {csv_output_dir}")
+
 
 def parse_insert_statement(insert_statement):
     # Trova l'inizio dei valori
