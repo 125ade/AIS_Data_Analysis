@@ -1,6 +1,8 @@
+"""
+Script che filtra il dataset in formato csv per escludere i punti che sono fuori dall'area di interesse
+"""
 import os
 import pandas as pd
-import numpy as np
 import multiprocessing as mp
 from shapely.geometry import Point, Polygon
 from tqdm import tqdm
@@ -52,11 +54,12 @@ mmsi_exclude = [
     "2386080"   # Croatia
 ]
 
-# Filter functions
+
 def filter_by_polygon(chunk):
     if 'Longitude' not in chunk.columns or 'Latitude' not in chunk.columns:
         raise KeyError("Columns 'Longitude' and 'Latitude' are required.")
     return chunk[chunk.apply(lambda row: area_polygon.contains(Point(row['Longitude'], row['Latitude'])), axis=1)]
+
 
 def filter_by_mmsi(chunk):
     if 'MMSI' not in chunk.columns:
@@ -68,6 +71,7 @@ def filter_by_mmsi(chunk):
         ~chunk['MMSI'].isin(mmsi_exclude)
     ]
     return chunk
+
 
 def process_file(args):
     file_path, output_folder = args
@@ -102,7 +106,6 @@ def process_file(args):
 
 
 if __name__ == '__main__':
-    # Path to the dataset folder containing the original CSV files
     dataset_folder = "dataset/AIS_Dataset_csv"
 
     # List of CSV files to process
