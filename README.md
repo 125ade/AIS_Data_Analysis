@@ -4,6 +4,20 @@
 
 <h1 align="center">AIS Data Analysis</h1>
 
+## 🌐 Project Overview
+
+**AIS Data Analysis** is a data science project focused on the analysis of Automatic Identification System (AIS) telemetry collected in the maritime area surrounding the Port of Ancona, Italy (2020–2023).  
+The project aims to explore, visualize, classify, and predict vessel behaviors using advanced data analysis techniques, geospatial tools, and machine learning models.
+
+Key goals of the project include:
+- Cleaning and structuring AIS data for efficient analysis
+- Generating statistical and geospatial visualizations
+- Performing vessel trajectory clustering
+- Training classification models for vessel type prediction
+- Forecasting future positions and navigation features
+
+---
+
 ## Quick Start Guide
 
 ### Step 1: Install Dependencies
@@ -82,4 +96,19 @@ The project workflows are organized into several phases and types of analysis:
 
 ### 8. Aggregated Statistics & Counts
 - **counter_1.py**: Aggregates and analyzes parameters (e.g., vessel count by time period, vessel type distribution, temporal statistics).
+
+## 📄 License
+
+This project is licensed under the **MIT License**.  
+See the [LICENSE](LICENSE) file for full details.
+
+---
+
+## 👥 Authors
+
+- **Micol Zazzarini**  
+- **Andrea Fiorani**  
+- **Antonio Antonini**
+
+Developed at **Università Politecnica delle Marche**, Department of Information Engineering.
 
